@@ -1,0 +1,23 @@
+neko/k 2025/10/13
+
+: assign f[1;2] funcall /comment
+Verb      (monad)          Adverb
++ +        flip           ^f' each
+- -        negation     [x]f/ over   c/ join    i/ decode
+* *        first        [y]f\ scan   c\ split   i\ encode
+% div      sqrt
+& where    min/and        i/o                   System
+| reverse  max/or        ^0: r/w line           \  man
+< asc      less          ^1: r/w file           \v var
+> desc     more          ^2: r/w csv            \t time
+= group    equal                                \\ exit
+~ match    not            cf
+! key      enum           $[b;t;f] cond
+, concat   enlist
+^ ^cut     sort           class                Type
+# take     count          list (1;2.3;"c")     char " ab"
+_ drop     floor         ^dict [`a:1;`b:2]     int  2 3
+? ^find   ^uniq           func f:{[a;b]a+b}    flt  2 3.4 4.
+@ ^at     ^type           expr x:a+b
+
+^exp ^rand sin cos abs ^log

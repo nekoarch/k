@@ -7,6 +7,7 @@
 #include "ast.h"
 #include "eval.h"
 #include "def.h"
+#include "ops.h"
 
 static char *k_strdup(const char *s) {
   size_t len = strlen(s);
@@ -28,28 +29,8 @@ static char *kobj_to_string(KObj *obj);
 static void print_inline(KObj *obj);
 
 static const char *op_to_text(TokenType t) {
-  switch (t) {
-  case PLUS: return "+";
-  case MINUS: return "-";
-  case STAR: return "*";
-  case PERCENT: return "%";
-  case AMP: return "&";
-  case BAR: return "|";
-  case TILDE: return "~";
-  case CARET: return "^";
-  case EQUAL: return "=";
-  case COLON: return ":";
-  case LESS: return "<";
-  case MORE: return ">";
-  case BANG: return "!";
-  case HASH: return "#";
-  case UNDERSCORE: return "_";
-  case COMMA: return ",";
-  case SIN: return "sin";
-  case COS: return "cos";
-  case ABS: return "abs";
-  default: return "<verb>";
-  }
+  const char *s = op_text(t);
+  return s ? s : "<verb>";
 }
 
 static char *ast_to_string(ASTNode *node);

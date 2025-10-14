@@ -2,6 +2,7 @@
 #include <ctype.h>
 #include <string.h>
 #include "lex.h"
+#include "ops.h"
 
 void init_lexer(Lexer *lexer, const char *source) {
   lexer->source = source;
@@ -64,15 +65,8 @@ static Token read_string(Lexer *lexer) {
 static Token read_ident(Lexer *lexer) {
   while (isalnum(*lexer->current)) advance(lexer);
   Token token = make_token(lexer, IDENT);
-  if (token.length == 3) {
-    if (strncmp(token.start, "sin", 3) == 0) {
-      token.type = SIN;
-    } else if (strncmp(token.start, "cos", 3) == 0) {
-      token.type = COS;
-    } else if (strncmp(token.start, "abs", 3) == 0) {
-      token.type = ABS;
-    }
-  }
+  const OpInfo *info = find_op_by_ident(token.start, token.length);
+  if (info) token.type = info->type;
   return token;
 }
 
@@ -84,27 +78,10 @@ Token scan_token(Lexer* lexer) {
   if (isdigit(c)) return read_number(lexer);
   if (c == '"') return read_string(lexer);
   if (isalpha(c)) return read_ident(lexer);
-  if (c == '_') return make_token(lexer, UNDERSCORE);
+  // Single-character operators via table
+  const OpInfo *op = find_op_by_char(c);
+  if (op) return make_token(lexer, op->type);
   switch (c) {
-  case '+': return make_token(lexer, PLUS);
-  case '-': return make_token(lexer, MINUS);
-  case '*': return make_token(lexer, STAR);
-  case '/': return make_token(lexer, SLASH);
-  case '\\': return make_token(lexer, BACKSLASH);
-  case '%': return make_token(lexer, PERCENT);
-  case '&': return make_token(lexer, AMP);
-  case '|': return make_token(lexer, BAR);
-  case '~': return make_token(lexer, TILDE);
-  case '^': return make_token(lexer, CARET);
-  case '!': return make_token(lexer, BANG);
-  case '#': return make_token(lexer, HASH);
-  case '$': return make_token(lexer, DOLLAR);
-  case '\'': return make_token(lexer, TICK);
-  case '<': return make_token(lexer, LESS);
-  case '>': return make_token(lexer, MORE);
-  case ':': return make_token(lexer, COLON);
-  case '=': return make_token(lexer, EQUAL);
-  case ',': return make_token(lexer, COMMA);
   case '(': return make_token(lexer, LPAREN);
   case ')': return make_token(lexer, RPAREN);
   case '[': return make_token(lexer, LBRACKET);

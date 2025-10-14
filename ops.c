@@ -1,5 +1,6 @@
 #include "ops.h"
 #include "builtins.h"
+#include <string.h>
 
 static const OpDesc op_table[] = {
   [PLUS]        = { k_flip,      k_add },
@@ -31,3 +32,59 @@ const OpDesc *get_op_desc(TokenType t) {
   return &empty_desc;
 }
 
+static const OpInfo op_infos[] = {
+  { PLUS,       "+", "+",  0, ASSOC_LEFT, 1 },
+  { MINUS,      "-", "-",  0, ASSOC_LEFT, 1 },
+  { STAR,       "*", "*",  0, ASSOC_LEFT, 1 },
+  { PERCENT,    "%", "%", 0, ASSOC_LEFT, 1 },
+  { AMP,        "&", "&",  0, ASSOC_LEFT, 1 },
+  { BAR,        "|", "|",  0, ASSOC_LEFT, 1 },
+  { TILDE,      "~", "~",  0, ASSOC_LEFT, 1 },
+  { CARET,      "^", "^",  0, ASSOC_LEFT, 1 },
+  { EQUAL,      "=", "=",  0, ASSOC_LEFT, 1 },
+  { LESS,       "<", "<",  0, ASSOC_LEFT, 1 },
+  { MORE,       ">", ">",  0, ASSOC_LEFT, 1 },
+  { BANG,       "!", "!",  0, ASSOC_LEFT, 1 },
+  { HASH,       "#", "#",  0, ASSOC_LEFT, 1 },
+  { UNDERSCORE, "_", "_",  0, ASSOC_LEFT, 1 },
+  { COMMA,      ",", ",",  0, ASSOC_LEFT, 1 },
+  { COLON,      ":", ":",  0, ASSOC_LEFT, 1 },
+  { EQUAL,      "=", "=",  0, ASSOC_LEFT, 1 },
+  { SLASH,      "/", "/",  0, ASSOC_LEFT, 1 },
+  { BACKSLASH,  "\\", "\\",0, ASSOC_LEFT, 1 },
+  { TICK,       "'", "'",  0, ASSOC_LEFT, 1 },
+  { DOLLAR,     "$", "$",  0, ASSOC_LEFT, 1 },
+  { SIN,        "sin", "sin", 0, ASSOC_LEFT, 1 },
+  { COS,        "cos", "cos", 0, ASSOC_LEFT, 1 },
+  { ABS,        "abs", "abs", 0, ASSOC_LEFT, 1 },
+};
+
+const OpInfo *get_op_info(TokenType t) {
+  for (size_t i = 0; i < sizeof(op_infos)/sizeof(op_infos[0]); i++) {
+    if (op_infos[i].type == t) return &op_infos[i];
+  }
+  return NULL;
+}
+
+const char *op_text(TokenType t) {
+  const OpInfo *info = get_op_info(t);
+  return info ? (info->print_text ? info->print_text : info->text) : NULL;
+}
+
+const OpInfo *find_op_by_char(char c) {
+  for (size_t i = 0; i < sizeof(op_infos)/sizeof(op_infos[0]); i++) {
+    const char *txt = op_infos[i].text;
+    if (txt && txt[0] == c && txt[1] == '\0') return &op_infos[i];
+  }
+  return NULL;
+}
+
+const OpInfo *find_op_by_ident(const char *s, int len) {
+  for (size_t i = 0; i < sizeof(op_infos)/sizeof(op_infos[0]); i++) {
+    const char *txt = op_infos[i].text;
+    if (txt && txt[0] && txt[1] && (int)strlen(txt) == len && strncmp(txt, s, (size_t)len) == 0) {
+      return &op_infos[i];
+    }
+  }
+  return NULL;
+}

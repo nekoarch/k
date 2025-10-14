@@ -50,11 +50,8 @@ static bool parse_args_until(Parser *parser, TokenType closing,
 }
 
 static bool is_unary_op(TokenType type) {
-  return type == MINUS || type == STAR || type == PLUS ||
-         type == AMP || type == PERCENT || type == BAR ||
-         type == TILDE || type == CARET || type == BANG ||
-         type == HASH || type == UNDERSCORE || type == EQUAL ||
-         type == LESS || type == MORE || type == COMMA;
+  const OpDesc *d = get_op_desc(type);
+  return d && d->unary != NULL;
 }
 
 static bool unary_op_allowed(Parser *parser) {

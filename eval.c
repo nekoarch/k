@@ -166,55 +166,151 @@ KObj* evaluate(ASTNode *node) {
             release_object(idx_obj);
             return right_val;
           }
-          int64_t *idxs = NULL;
-          size_t idx_count = 0;
           if (idx_obj->type == INT) {
-            idx_count = 1;
-            idxs = (int64_t *)malloc(sizeof(int64_t));
-            idxs[0] = idx_obj->as.int_value;
+            size_t vec_len = vec->as.vector->length;
+            int64_t id = idx_obj->as.int_value;
+            if (id < 0 || (size_t)id >= vec_len) {
+              printf("^length\n");
+              release_object(vec);
+              release_object(idx_obj);
+              release_object(right_val);
+              return create_nil();
+            }
+            vector_set(vec, (size_t)id, right_val);
+            release_object(vec);
+            release_object(idx_obj);
+            return right_val;
           } else if (idx_obj->type == VECTOR) {
-            idx_count = idx_obj->as.vector->length;
-            idxs = (int64_t *)malloc(sizeof(int64_t) * idx_count);
+            size_t idx_count = idx_obj->as.vector->length;
+            int64_t *idxs = (int64_t *)malloc(sizeof(int64_t) * idx_count);
             for (size_t i = 0; i < idx_count; i++) {
               KObj *it = &idx_obj->as.vector->items[i];
               if (it->type != INT) {
                 printf("^type\n");
-                goto assign_cleanup;
+                free(idxs);
+                release_object(vec);
+                release_object(idx_obj);
+                release_object(right_val);
+                return create_nil();
               }
               idxs[i] = it->as.int_value;
             }
+            bool val_is_vec = right_val->type == VECTOR;
+            size_t val_count = val_is_vec ? right_val->as.vector->length : 1;
+            if (val_count != idx_count) {
+              printf("^length\n");
+              free(idxs);
+              release_object(vec);
+              release_object(idx_obj);
+              release_object(right_val);
+              return create_nil();
+            }
+            size_t vec_len = vec->as.vector->length;
+            for (size_t i = 0; i < idx_count; i++) {
+              if (idxs[i] < 0 || (size_t)idxs[i] >= vec_len) {
+                printf("^length\n");
+                free(idxs);
+                release_object(vec);
+                release_object(idx_obj);
+                release_object(right_val);
+                return create_nil();
+              }
+            }
+            for (size_t i = 0; i < idx_count; i++) {
+              size_t pos = (size_t)idxs[i];
+              KObj *new_val = val_is_vec ? &right_val->as.vector->items[i] : right_val;
+              vector_set(vec, pos, new_val);
+            }
+            free(idxs);
+            release_object(vec);
+            release_object(idx_obj);
+            return right_val;
           } else {
             printf("^type\n");
-            goto assign_cleanup;
+            release_object(vec);
+            release_object(idx_obj);
+            release_object(right_val);
+            return create_nil();
           }
-          bool val_is_vec = right_val->type == VECTOR;
-          size_t val_count = val_is_vec ? right_val->as.vector->length : 1;
-          if (val_count != idx_count) {
-            printf("^length\n");
-            goto assign_cleanup;
+        }
+        if (call->as.call.callee->type == AST_LITERAL &&
+            call->as.call.callee->as.literal.value->type == SYM &&
+            call->as.call.arg_count >= 2) {
+          const char *name = call->as.call.callee->as.literal.value->as.symbol_value;
+          KObj *vec = env_get(name);
+          if (vec->type != VECTOR) {
+            if (vec->type != NIL) printf("^type\n");
+            release_object(vec);
+            return create_nil();
           }
-          size_t vec_len = vec->as.vector->length;
-          for (size_t i = 0; i < idx_count; i++) {
-            if (idxs[i] < 0 || (size_t)idxs[i] >= vec_len) {
-              printf("^length\n");
-              goto assign_cleanup;
+          size_t argc = call->as.call.arg_count;
+          KObj **idxobjs = (KObj **)malloc(sizeof(KObj*) * argc);
+          for (size_t i = 0; i < argc; i++) {
+            idxobjs[i] = evaluate(call->as.call.args[i]);
+            if (idxobjs[i]->type == NIL) {
+              for (size_t j = 0; j <= i; j++) release_object(idxobjs[j]);
+              free(idxobjs);
+              release_object(vec);
+              return create_nil();
+            }
+            if (idxobjs[i]->type != INT) {
+              printf("^type\n");
+              for (size_t j = 0; j <= i; j++) release_object(idxobjs[j]);
+              free(idxobjs);
+              release_object(vec);
+              return create_nil();
             }
           }
-          for (size_t i = 0; i < idx_count; i++) {
-            size_t pos = (size_t)idxs[i];
-            KObj *new_val = val_is_vec ? &right_val->as.vector->items[i] : right_val;
-            vector_set(vec, pos, new_val);
+          // Traverse to the container vector for the last index
+          KObj *container = vec;
+          for (size_t i = 0; i + 1 < argc; i++) {
+            if (container->type != VECTOR) {
+              printf("^type\n");
+              for (size_t j = 0; j < argc; j++) release_object(idxobjs[j]);
+              free(idxobjs);
+              release_object(vec);
+              return create_nil();
+            }
+            int64_t id = idxobjs[i]->as.int_value;
+            size_t len = container->as.vector->length;
+            if (id < 0 || (size_t)id >= len) {
+              printf("^length\n");
+              for (size_t j = 0; j < argc; j++) release_object(idxobjs[j]);
+              free(idxobjs);
+              release_object(vec);
+              return create_nil();
+            }
+            KObj *child = &container->as.vector->items[id];
+            container = child;
           }
-          free(idxs);
+          if (container->type != VECTOR) {
+            printf("^type\n");
+            for (size_t j = 0; j < argc; j++) release_object(idxobjs[j]);
+            free(idxobjs);
+            release_object(vec);
+            return create_nil();
+          }
+          int64_t last = idxobjs[argc - 1]->as.int_value;
+          size_t clen = container->as.vector->length;
+          if (last < 0 || (size_t)last >= clen) {
+            printf("^length\n");
+            for (size_t j = 0; j < argc; j++) release_object(idxobjs[j]);
+            free(idxobjs);
+            release_object(vec);
+            return create_nil();
+          }
+          KObj *right_val = evaluate(node->as.binary.right);
+          if (right_val->type == NIL) {
+            for (size_t j = 0; j < argc; j++) release_object(idxobjs[j]);
+            free(idxobjs);
+            release_object(vec);
+            return right_val;
+          }
+          vector_set(container, (size_t)last, right_val);
+          for (size_t j = 0; j < argc; j++) release_object(idxobjs[j]);
+          free(idxobjs);
           release_object(vec);
-          release_object(idx_obj);
           return right_val;
-assign_cleanup:
-          if (idxs) free(idxs);
-          release_object(vec);
-          release_object(idx_obj);
-          release_object(right_val);
-          return create_nil();
         }
       }
       printf("^assign\n");

@@ -78,10 +78,8 @@ static KObj *token_to_number(Token token) {
   }
   bool is_float = false;
   for (int i = 0; i < token.length; i++) {
-    if (token.start[i] == '.') {
-      is_float = true;
-      break;
-    }
+    char ch = token.start[i];
+    if (ch == '.' || ch == 'e' || ch == 'E') { is_float = true; break; }
   }
   if (is_float) {
     double val = strtod(token.start, NULL);

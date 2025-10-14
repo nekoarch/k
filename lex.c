@@ -43,11 +43,29 @@ static void skip_space(Lexer *lexer) {
 }
 
 static Token read_number(Lexer *lexer) {
-  while (isdigit(*lexer->current)) advance(lexer);
-  if (*lexer->current == '.') {
-    advance(lexer);
+  //  digits ('.' digits)? ([eE] ['+'|'-']? digits)? ('w'|'W')?
+  //  '.' digits ([eE] ['+'|'-']? digits)? ('w'|'W')?
+  bool started_with_dot = (lexer->start[0] == '.');
+  if (started_with_dot) {
     while (isdigit(*lexer->current)) advance(lexer);
+  } else {
+    while (isdigit(*lexer->current)) advance(lexer);
+    if (*lexer->current == '.') {
+      advance(lexer);
+      while (isdigit(*lexer->current)) advance(lexer);
+    }
   }
+  if (*lexer->current == 'e' || *lexer->current == 'E') {
+    const char *exp_start = lexer->current;
+    advance(lexer);
+    if (*lexer->current == '+' || *lexer->current == '-') advance(lexer);
+    if (isdigit(*lexer->current)) {
+      while (isdigit(*lexer->current)) advance(lexer);
+    } else {
+      lexer->current = exp_start;
+    }
+  }
+  
   if (*lexer->current == 'w' || *lexer->current == 'W') advance(lexer);
   return make_token(lexer, NUMBER);
 }
@@ -76,9 +94,9 @@ Token scan_token(Lexer* lexer) {
   if (at_end(lexer)) return make_token(lexer, KEOF);
   char c = advance(lexer);
   if (isdigit(c)) return read_number(lexer);
+  if (c == '.' && isdigit(*lexer->current)) return read_number(lexer);
   if (c == '"') return read_string(lexer);
   if (isalpha(c)) return read_ident(lexer);
-  // Single-character operators via table
   const OpInfo *op = find_op_by_char(c);
   if (op) return make_token(lexer, op->type);
   switch (c) {

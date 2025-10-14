@@ -279,13 +279,50 @@ assign_cleanup:
     }
     size_t argn = node->as.call.arg_count;
     KObj **args = (KObj **)malloc(sizeof(KObj *) * argn);
-    for (size_t i = 0; i < argn; i++) {
-      args[i] = evaluate(node->as.call.args[i]);
-      if (args[i]->type == NIL) {
-        for (size_t j = 0; j <= i; j++) release_object(args[j]);
+    size_t assign_idx = (size_t)-1;
+    if (fn->type == ADVERB && argn >= 2) {
+      for (size_t i = 0; i < argn; i++) {
+        ASTNode *a = node->as.call.args[i];
+        if (a && a->type == AST_BINARY && a->as.binary.op.type == COLON &&
+            a->as.binary.left && a->as.binary.left->type == AST_LITERAL &&
+            a->as.binary.left->as.literal.value &&
+            a->as.binary.left->as.literal.value->type == SYM) {
+          assign_idx = i;
+          break;
+        }
+      }
+    }
+    if (assign_idx != (size_t)-1) {
+      args[assign_idx] = evaluate(node->as.call.args[assign_idx]);
+      if (args[assign_idx]->type == NIL) {
         release_object(fn);
         free(args);
         return create_nil();
+      }
+      for (size_t i = 0; i < argn; i++) {
+        if (i == assign_idx) continue;
+        args[i] = evaluate(node->as.call.args[i]);
+        if (args[i]->type == NIL) {
+          for (size_t j = 0; j < argn; j++) {
+            if (j == i) break;
+            if (j == assign_idx) continue;
+            release_object(args[j]);
+          }
+          release_object(args[assign_idx]);
+          release_object(fn);
+          free(args);
+          return create_nil();
+        }
+      }
+    } else {
+      for (size_t i = 0; i < argn; i++) {
+        args[i] = evaluate(node->as.call.args[i]);
+        if (args[i]->type == NIL) {
+          for (size_t j = 0; j <= i; j++) release_object(args[j]);
+          release_object(fn);
+          free(args);
+          return create_nil();
+        }
       }
     }
     if (fn->type == ADVERB) {

@@ -343,14 +343,7 @@ assign_cleanup:
         }
       } else if (fn->as.adverb->op.type == TICK) {
         if (child->type == VERB || child->type == LAMBDA) {
-          if (argn == 1) {
-            result = k_each(child, args[0], NULL);
-          } else if (argn == 2) {
-            result = k_each(child, args[0], args[1]);
-          } else {
-            printf("^rank (each)\n");
-            result = create_nil();
-          }
+          result = k_each_n(child, args, argn);
         } else {
           printf("^type (each)\n");
           result = create_nil();
@@ -563,5 +556,43 @@ KObj* call_binary(KObj* fn, KObj* left, KObj* right) {
     return fn->as.verb.binary(left, right);
   }
   printf("^rank\n");
+  return create_nil();
+}
+
+KObj* call_n(KObj* fn, KObj** args, size_t argn) {
+  if (fn->type == LAMBDA) {
+    env_push();
+    KLambda* lam = fn->as.lambda;
+    if (lam->param_count > 0) {
+      size_t n = lam->param_count < (int)argn ? (size_t)lam->param_count : argn;
+      for (size_t i = 0; i < n; i++) {
+        env_set(lam->params[i], args[i]);
+      }
+    } else {
+      const char *defaults[] = {"x", "y", "z"};
+      size_t n = argn < 3 ? argn : 3;
+      for (size_t i = 0; i < n; i++) {
+        env_set(defaults[i], args[i]);
+      }
+    }
+    KObj* result = create_nil();
+    for (size_t i = 0; i < lam->body_count; i++) {
+      release_object(result);
+      result = evaluate(lam->body[i]);
+    }
+    if (!lam->has_return) {
+      release_object(result);
+      result = create_nil();
+    }
+    env_pop();
+    return result;
+  }
+  if (fn->type == VERB) {
+    if (argn == 1 && fn->as.verb.unary) return fn->as.verb.unary(args[0]);
+    if (argn == 2 && fn->as.verb.binary) return fn->as.verb.binary(args[0], args[1]);
+    printf("^rank\n");
+    return create_nil();
+  }
+  printf("^type\n");
   return create_nil();
 }

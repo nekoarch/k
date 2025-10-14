@@ -1,8 +1,8 @@
-neko/k 2025/10/13
+neko/k 2025/10/14
 
 : assign f[1;2] funcall /comment
 Verb      (monad)          Adverb
-+ +        flip           ^f' each
++ +        flip            f' each
 - -        negation     [x]f/ over   c/ join    i/ decode
 * *        first        [y]f\ scan   c\ split   i\ encode
 % div      sqrt

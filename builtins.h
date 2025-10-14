@@ -37,6 +37,7 @@ KObj* k_enlist(KObj* value);
 KObj* k_floor(KObj* value);
 KObj* k_over(KObj* func, KObj* list, KObj* init);
 KObj* k_each(KObj* func, KObj* left, KObj* right);
+KObj* k_each_n(KObj* func, KObj** args, size_t argn);
 KObj* k_join(KObj* sep, KObj* list);
 KObj* k_decode(KObj* base, KObj* list);
 KObj* k_scan(KObj* func, KObj* list, KObj* init);

@@ -1313,6 +1313,77 @@ KObj* k_each(KObj* func, KObj* left, KObj* right) {
   return res;
 }
 
+KObj* k_each_n(KObj* func, KObj** args, size_t argn) {
+  if (argn == 0) {
+    printf("^rank\n");
+    return create_nil();
+  }
+  if (argn == 1) {
+    return k_each(func, args[0], NULL);
+  }
+  size_t len = 0;
+  int have_vec = 0;
+  for (size_t i = 0; i < argn; i++) {
+    if (args[i]->type == VECTOR) {
+      size_t l = args[i]->as.vector->length;
+      if (!have_vec || l > len) { len = l; have_vec = 1; }
+    }
+  }
+  if (!have_vec) {
+    printf("^type\n");
+    return create_nil();
+  }
+  for (size_t i = 0; i < argn; i++) {
+    if (args[i]->type == VECTOR) {
+      size_t l = args[i]->as.vector->length;
+      if (!(l == len || l == 1)) {
+        printf("^length\n");
+        return create_nil();
+      }
+    }
+  }
+  KObj* res = create_vec(len);
+  for (size_t i = 0; i < len; i++) {
+    KObj** call_args = (KObj**)malloc(sizeof(KObj*) * argn);
+    for (size_t j = 0; j < argn; j++) {
+      if (args[j]->type == VECTOR) {
+        size_t l = args[j]->as.vector->length;
+        call_args[j] = &args[j]->as.vector->items[(l == 1) ? 0 : i];
+      } else {
+        call_args[j] = args[j];
+      }
+    }
+    KObj* val = NULL;
+    if (func->type == VERB) {
+      if (argn == 1 && func->as.verb.unary) {
+        val = func->as.verb.unary(call_args[0]);
+      } else if (argn == 2 && func->as.verb.binary) {
+        val = func->as.verb.binary(call_args[0], call_args[1]);
+      } else {
+        free(call_args);
+        release_object(res);
+        printf("^rank\n");
+        return create_nil();
+      }
+    } else if (func->type == LAMBDA) {
+      val = call_n(func, call_args, argn);
+    } else {
+      free(call_args);
+      release_object(res);
+      printf("^type\n");
+      return create_nil();
+    }
+    free(call_args);
+    if (val->type == NIL) {
+      release_object(res);
+      return val;
+    }
+    vector_append(res, val);
+    release_object(val);
+  }
+  return res;
+}
+
 KObj* k_over(KObj* func, KObj* list, KObj* init) {
   if (list->type != VECTOR) {
     printf("^type\n");

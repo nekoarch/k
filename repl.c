@@ -521,7 +521,21 @@ static void parse_timing_args(char *q, long *runs_out, char **expr_out) {
 static int process_line(char *p, int interactive) {
   if (*p == '\0') { if (interactive) printf("  "); return 1; }
   if (strcmp(p, "\\\\") == 0) { return 0; }
-  if (strcmp(p, "\\") == 0) { if (interactive) printf("man nyi\n  "); return 1; }
+  if (strcmp(p, "\\") == 0) {
+    FILE *f = fopen("man", "r");
+    if (!f) {
+      printf("^io\n");
+      if (interactive) printf("  ");
+      return 1;
+    }
+    char buf[1024];
+    while (fgets(buf, sizeof(buf), f)) {
+      fputs(buf, stdout);
+    }
+    fclose(f);
+    if (interactive) printf("  ");
+    return 1;
+  }
   if (strcmp(p, "\\v") == 0) { env_dump(); if (interactive) printf("  "); return 1; }
   if (strncmp(p, "\\t", 2) == 0) {
     char *q = p + 2; long runs = 1; char *expr = q; parse_timing_args(q, &runs, &expr);

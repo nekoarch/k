@@ -15,6 +15,40 @@ static ASTNode *parse_lambda(Parser *parser);
 static ASTNode *parse_list(Parser *parser);
 static void advance(Parser *parser);
 
+static bool parse_args_until(Parser *parser, TokenType closing,
+                             ASTNode ***out_args, size_t *out_count) {
+  ASTNode **args = NULL;
+  size_t arg_capacity = 4;
+  size_t arg_count = 0;
+  args = (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *) * arg_capacity);
+  if (parser->current.type != closing) {
+    while (true) {
+      ASTNode *arg = parse_expression(parser);
+      if (!arg) {
+        if (args) {
+          for (size_t i = 0; i < arg_count; i++) free_ast(args[i]);
+        }
+        return false;
+      }
+      if (arg_count >= arg_capacity) {
+        arg_capacity *= 2;
+        ASTNode **new_args = (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *) * arg_capacity);
+        memcpy(new_args, args, arg_count * sizeof(ASTNode *));
+        args = new_args;
+      }
+      args[arg_count++] = arg;
+      if (parser->current.type == SEMICOLON) {
+        advance(parser);
+        continue;
+      }
+      break;
+    }
+  }
+  *out_args = args;
+  *out_count = arg_count;
+  return true;
+}
+
 static bool is_unary_op(TokenType type) {
   return type == MINUS || type == STAR || type == PLUS ||
          type == AMP || type == PERCENT || type == BAR ||
@@ -32,7 +66,7 @@ static bool unary_op_allowed(Parser *parser) {
   bool allowed = !((parser->current.type == SLASH ||
                     parser->current.type == BACKSLASH ||
                     parser->current.type == TICK) &&
-                   !parser->lexer->had_whitespace);
+                   !parser->current.ws_before);
   *parser->lexer = backup_lexer;
   parser->current = backup_current;
   parser->previous = backup_previous;
@@ -128,10 +162,10 @@ static bool is_prefix_context(Parser *parser) {
   default:
     break;
   }
-  if (parser->lexer->had_whitespace && is_value_token(prev)) {
+  if (parser->current.ws_before && is_value_token(prev)) {
     Lexer backup = *parser->lexer;
     Token next = scan_token(parser->lexer);
-    bool result = (next.type == NUMBER && !parser->lexer->had_whitespace);
+    bool result = (next.type == NUMBER && !next.ws_before);
     *parser->lexer = backup;
     return result;
   }
@@ -147,7 +181,7 @@ static bool consume_negative(Parser *parser, Token *out) {
   Token backup_previous = parser->previous;
 
   advance(parser); // consume '-'
-  if (parser->current.type == NUMBER && !parser->lexer->had_whitespace) {
+  if (parser->current.type == NUMBER && !parser->current.ws_before) {
     Token number = parser->current;
     Token combined;
     combined.type = NUMBER;
@@ -181,7 +215,7 @@ static bool peek_negative(Parser *parser) {
   Token backup_current = parser->current;
   Token backup_previous = parser->previous;
   advance(parser);
-  bool result = (parser->current.type == NUMBER && !parser->lexer->had_whitespace);
+  bool result = (parser->current.type == NUMBER && !parser->current.ws_before);
   *parser->lexer = backup_lexer;
   parser->current = backup_current;
   parser->previous = backup_previous;
@@ -386,7 +420,7 @@ static ASTNode *parse_postfix(Parser *parser) {
     bool adverb_follow = ((parser->current.type == SLASH ||
                            parser->current.type == BACKSLASH ||
                            parser->current.type == TICK) &&
-                          !parser->lexer->had_whitespace);
+                          !parser->current.ws_before);
     *parser->lexer = backup_lexer;
     parser->current = backup_current;
     if (adverb_follow) {
@@ -404,7 +438,7 @@ static ASTNode *parse_postfix(Parser *parser) {
   while (true) {
     if ((parser->current.type == SLASH || parser->current.type == BACKSLASH ||
          parser->current.type == TICK) &&
-        !parser->lexer->had_whitespace) {
+        !parser->current.ws_before) {
       Token op = parser->current;
       advance(parser);
       node = create_adverb_node(op, node);
@@ -448,34 +482,15 @@ static ASTNode *parse_postfix(Parser *parser) {
       continue;
     }
     if (parser->current.type == LBRACKET ||
-        (parser->current.type == LPAREN && !parser->lexer->had_whitespace)) {
+        (parser->current.type == LPAREN && !parser->current.ws_before)) {
       bool paren_call = parser->current.type == LPAREN;
       TokenType closing = parser->current.type == LBRACKET ? RBRACKET : RPAREN;
       advance(parser); // [ or (
       ASTNode **args = NULL;
-      size_t arg_capacity = 4;
       size_t arg_count = 0;
-      args = (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *) * arg_capacity);
-      if (parser->current.type != closing) {
-        while (true) {
-          ASTNode *arg = parse_expression(parser);
-          if (!arg) {
-            free_ast(node);
-            goto arg_error;
-          }
-          if (arg_count >= arg_capacity) {
-            arg_capacity *= 2;
-            ASTNode **new_args = (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *) * arg_capacity);
-            memcpy(new_args, args, arg_count * sizeof(ASTNode *));
-            args = new_args;
-          }
-          args[arg_count++] = arg;
-          if (parser->current.type == SEMICOLON) {
-            advance(parser);
-            continue;
-          }
-          break;
-        }
+      if (!parse_args_until(parser, closing, &args, &arg_count)) {
+        free_ast(node);
+        goto arg_error;
       }
       if (parser->current.type != closing) {
         printf("^error: %c \n", closing == RBRACKET ? ']' : ')');
@@ -519,7 +534,7 @@ arg_error:
       node = create_call_node(node, args, 1);
       continue;
     }
-    if (parser->lexer->had_whitespace &&
+    if (parser->current.ws_before &&
         (is_expr_start(parser->current.type) || peek_negative(parser) ||
          peek_enumerate(parser) ||
          (node->type == AST_LITERAL &&
@@ -549,31 +564,9 @@ static ASTNode *parse_unary(Parser *parser) {
     if (parser->current.type == LBRACKET) {
       advance(parser);
       ASTNode **args = NULL;
-      size_t arg_capacity = 4;
       size_t arg_count = 0;
-      args = (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *) * arg_capacity);
-      if (parser->current.type != RBRACKET) {
-        while (true) {
-          ASTNode *arg = parse_expression(parser);
-          if (!arg) {
-            if (args) {
-              for (size_t i = 0; i < arg_count; i++) free_ast(args[i]);
-            }
-            return NULL;
-          }
-          if (arg_count >= arg_capacity) {
-            arg_capacity *= 2;
-            ASTNode **new_args = (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *) * arg_capacity);
-            memcpy(new_args, args, arg_count * sizeof(ASTNode *));
-            args = new_args;
-          }
-          args[arg_count++] = arg;
-          if (parser->current.type == SEMICOLON) {
-            advance(parser);
-            continue;
-          }
-          break;
-        }
+      if (!parse_args_until(parser, RBRACKET, &args, &arg_count)) {
+        return NULL;
       }
       if (parser->current.type != RBRACKET) {
         printf("^error: ] \n");
@@ -645,32 +638,10 @@ static ASTNode *parse_unary(Parser *parser) {
     count--;
     advance(parser); // [
     ASTNode **args = NULL;
-    size_t arg_capacity = 4;
     size_t arg_count = 0;
-    args = (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *) * arg_capacity);
-    if (parser->current.type != RBRACKET) {
-      while (true) {
-        ASTNode *arg = parse_expression(parser);
-        if (!arg) {
-          if (args) {
-            for (size_t i = 0; i < arg_count; i++) free_ast(args[i]);
-          }
-          free(ops);
-          return NULL;
-        }
-        if (arg_count >= arg_capacity) {
-          arg_capacity *= 2;
-          ASTNode **new_args = (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *) * arg_capacity);
-          memcpy(new_args, args, arg_count * sizeof(ASTNode *));
-          args = new_args;
-        }
-        args[arg_count++] = arg;
-        if (parser->current.type == SEMICOLON) {
-          advance(parser);
-          continue;
-        }
-        break;
-      }
+    if (!parse_args_until(parser, RBRACKET, &args, &arg_count)) {
+      free(ops);
+      return NULL;
     }
     if (parser->current.type != RBRACKET) {
       printf("^error: ] \n");
@@ -750,7 +721,7 @@ static ASTNode* parse_expression(Parser* parser) {
     advance(parser);
     if ((parser->current.type == SLASH || parser->current.type == BACKSLASH ||
          parser->current.type == TICK) &&
-        !parser->lexer->had_whitespace) {
+        !parser->current.ws_before) {
       Token adv = parser->current;
       advance(parser);
       ASTNode* right_node = parse_expression(parser);

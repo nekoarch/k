@@ -16,8 +16,12 @@ static char advance(Lexer *lexer) { return *lexer->current++;
 }
 
 static Token make_token(Lexer *lexer, TokenType type) {
-  return (Token){type, lexer->start,
-                 (int)(lexer->current - lexer->start)};
+  Token t;
+  t.type = type;
+  t.start = lexer->start;
+  t.length = (int)(lexer->current - lexer->start);
+  t.ws_before = lexer->had_whitespace;
+  return t;
 }
 
 static void skip_space(Lexer *lexer) {

@@ -2,6 +2,7 @@
 #define TOKEN_H_
 
 #include <stdint.h>
+#include <stdbool.h>
 
 typedef enum {
   PLUS,
@@ -45,6 +46,7 @@ typedef struct {
   TokenType type;
   const char *start;
   int length;
+  bool ws_before;
 } Token;
 
 #endif

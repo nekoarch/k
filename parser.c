@@ -212,7 +212,7 @@ static void advance(Parser *parser) {
 static bool is_value_token(TokenType type) {
   return type == NUMBER || type == IDENT || type == STRING ||
          type == RPAREN || type == RBRACKET || type == RBRACE ||
-         type == SIN || type == COS || type == ABS;
+         type == SIN || type == COS || type == ABS || type == EXP || type == LOG || type == RAND;
 }
 
 static bool is_expr_start(TokenType type) {
@@ -230,6 +230,7 @@ static bool is_prefix_context(Parser *parser) {
   case LBRACE:
   case COLON: case SEMICOLON:
   case SIN:
+  case EXP:
   case COS:
   case ABS:
   case SLASH:
@@ -447,7 +448,7 @@ static ASTNode *parse_primary(Parser *parser) {
     }
     return create_literal_node(first_val);
   }
-  if (parser->current.type == SIN || parser->current.type == COS || parser->current.type == ABS) {
+  if (parser->current.type == SIN || parser->current.type == COS || parser->current.type == ABS || parser->current.type == EXP || parser->current.type == LOG || parser->current.type == RAND) {
     Token tok = parser->current;
     advance(parser);
     KObj *verb = token_to_verb(tok);
@@ -792,6 +793,7 @@ static ASTNode* parse_expression(Parser* parser) {
       parser->current.type == COLON || parser->current.type == BAR ||
       parser->current.type == TILDE || parser->current.type == CARET ||
       parser->current.type == EQUAL || parser->current.type == BANG ||
+      parser->current.type == EXP || parser->current.type == LOG || parser->current.type == RAND ||
       parser->current.type == HASH || parser->current.type == UNDERSCORE || parser->current.type == LESS ||
       parser->current.type == MORE || parser->current.type == COMMA) {
     Token op = parser->current;

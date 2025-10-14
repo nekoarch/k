@@ -20,4 +20,4 @@ _ drop     floor         ^dict [`a:1;`b:2]     int  2 3
 ? ^find   ^uniq           func f:{[a;b]a+b}    flt  2 3.4 4.
 @ ^at     ^type           expr x:a+b
 
-^exp ^rand sin cos abs ^log
+exp log rand sin cos abs

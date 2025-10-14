@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <ctype.h>
+#include <time.h>
 
 static bool is_number(KObj *v) {
   return v->type == INT || v->type == FLOAT || v->type == CHAR ||
@@ -288,6 +289,18 @@ static KObj *op_sin(KObj *left, KObj *value) {
   return create_float(sin(v));
 }
 
+static KObj *op_exp(KObj *left, KObj *value) {
+  (void)left;
+  if (!is_number(value)) return create_nil();
+  if (value->type == PINF) return create_pinf();
+  if (value->type == NINF) return create_float(0.0);
+  double v = as_double(value);
+  double r = exp(v);
+  if (isinf(r)) return r > 0 ? create_pinf() : create_ninf();
+  if (isnan(r)) return create_nil();
+  return create_float(r);
+}
+
 static KObj *op_cos(KObj *left, KObj *value) {
   (void)left;
   if (!is_number(value)) return create_nil();
@@ -316,6 +329,173 @@ static KObj *op_sqrt(KObj *left, KObj *value) {
   double v = as_double(value);
   if (v < 0) return create_nil();
   return create_float(sqrt(v));
+}
+
+static uint64_t rng_state = 0;
+
+static inline uint64_t splitmix64_next(uint64_t *x) {
+  uint64_t z = (*x += 0x9e3779b97f4a7c15ULL);
+  z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ULL;
+  z = (z ^ (z >> 27)) * 0x94d049bb133111ebULL;
+  return z ^ (z >> 31);
+}
+
+static void rng_init(void) {
+  if (rng_state != 0) return;
+  uint64_t t = (uint64_t)time(NULL);
+  uint64_t c = (uint64_t)clock();
+  uint64_t s = ((t << 32) ^ c ^ (uint64_t)(uintptr_t)&t);
+  if (s == 0) s = 0xdeadbeefcafebabeULL;
+  rng_state = s;
+}
+
+static inline uint64_t rng_u64(void) {
+  rng_init();
+  return splitmix64_next(&rng_state);
+}
+
+static inline uint64_t rng_bounded(uint64_t bound) {
+  if (bound == 0) return 0;
+  uint64_t threshold = -bound % bound;
+  while (1) {
+    uint64_t r = rng_u64();
+    if (r >= threshold) return r % bound;
+  }
+}
+
+static inline double rng_double(void) {
+  return (rng_u64() >> 11) * (1.0 / 9007199254740992.0);
+}
+
+static KObj *op_rand1(KObj *left, KObj *value) {
+  (void)left;
+  if (value->type == VECTOR) {
+    size_t len = value->as.vector->length;
+    KObj *res = create_vec(len);
+    for (size_t i = 0; i < len; i++) {
+      KObj *nobj = &value->as.vector->items[i];
+      if (!is_number(nobj)) {
+        release_object(res);
+        return create_nil();
+      }
+      int64_t n = as_int(nobj);
+      if (n < 0) n = 0;
+      KObj *row = create_vec((size_t)n);
+      KObj *items = row->as.vector->items;
+      for (int64_t j = 0; j < n; j++) {
+        items[j].type = FLOAT;
+        items[j].ref_count = 1;
+        items[j].as.float_value = rng_double();
+      }
+      row->as.vector->length = (size_t)n;
+      vector_append(res, row);
+      release_object(row);
+    }
+    return res;
+  }
+  if (!is_number(value)) return create_nil();
+  int64_t n = as_int(value);
+  if (n < 0) n = 0;
+  KObj *res = create_vec((size_t)n);
+  KObj *items = res->as.vector->items;
+  for (int64_t i = 0; i < n; i++) {
+    items[i].type = FLOAT;
+    items[i].ref_count = 1;
+    items[i].as.float_value = rng_double();
+  }
+  res->as.vector->length = (size_t)n;
+  return res;
+}
+
+static KObj *op_rand2(KObj *left, KObj *right) {
+  if (!is_number(left) || !is_number(right)) return create_nil();
+  int64_t n = as_int(left);
+  int64_t m = as_int(right);
+  if (n < 0) n = 0;
+  if (m <= 0 || n == 0) return create_vec(0);
+  KObj *res = create_vec((size_t)n);
+  KObj *items = res->as.vector->items;
+  for (int64_t i = 0; i < n; i++) {
+    items[i].type = INT;
+    items[i].ref_count = 1;
+    items[i].as.int_value = (int64_t)rng_bounded((uint64_t)m);
+  }
+  res->as.vector->length = (size_t)n;
+  return res;
+}
+
+static KObj *op_log(KObj *left, KObj *value) {
+  (void)left;
+  if (!is_number(value)) return create_nil();
+  if (value->type == NINF) return create_nil();
+  if (value->type == PINF) return create_pinf();
+  double v = as_double(value);
+  if (v < 0) return create_nil();
+  if (v == 0.0) return create_ninf();
+  double r = log(v);
+  if (isinf(r)) return r > 0 ? create_pinf() : create_ninf();
+  if (isnan(r)) return create_nil();
+  return create_float(r);
+}
+
+static KObj *op_logb(KObj *left, KObj *right) {
+  if (!are_numbers(left, right)) return create_nil();
+  double base, val;
+  if (left->type == NINF) return create_nil();
+  if (left->type == PINF) base = INFINITY; else base = as_double(left);
+  if (right->type == NINF) return create_nil();
+  if (right->type == PINF) val = INFINITY; else val = as_double(right);
+  if (!(base > 0.0) || base == 1.0) return create_nil();
+  if (!(val > 0.0)) return create_nil();
+  double r = log(val) / log(base);
+  if (isinf(r)) return r > 0 ? create_pinf() : create_ninf();
+  if (isnan(r)) return create_nil();
+  return create_float(r);
+}
+
+static KObj *op_pow(KObj *left, KObj *right) {
+  if (!are_numbers(left, right)) return create_nil();
+  if (right->type == PINF || right->type == NINF) {
+    // nah
+    return create_nil();
+  }
+  if (left->type == PINF) {
+    // (+inf)^y
+    if (right->type == FLOAT) {
+      double ry = right->as.float_value;
+      if (ry == 0.0) return create_float(1.0);
+      return ry > 0.0 ? create_pinf() : create_float(0.0);
+    } else {
+      int64_t iy = as_int(right);
+      if (iy == 0) return create_float(1.0);
+      return iy > 0 ? create_pinf() : create_float(0.0);
+    }
+  }
+  if (left->type == NINF) {
+    if (right->type == FLOAT) {
+      return create_nil();
+    }
+    int64_t iy = as_int(right);
+    if (iy == 0) return create_float(1.0);
+    if (iy > 0) {
+      if ((iy & 1) == 0) return create_pinf();
+      return create_ninf();
+    }
+    return create_float(0.0);
+  }
+
+  double base = as_double(left);
+  double expv;
+  if (right->type == FLOAT) expv = right->as.float_value; else expv = (double)as_int(right);
+
+  if (base < 0 && right->type == FLOAT) {
+    double i;
+    if (modf(expv, &i) != 0.0) return create_nil();
+  }
+  double r = pow(base, expv);
+  if (isinf(r)) return r > 0 ? create_pinf() : create_ninf();
+  if (isnan(r)) return create_nil();
+  return create_float(r);
 }
 
 static KObj *op_not(KObj *left, KObj *value) {
@@ -380,6 +560,14 @@ KObj *k_eq(KObj *left, KObj *right) {
   return apply_binary(left, right, op_eq);
 }
 
+KObj *k_exp(KObj *value) {
+  return apply_binary(value, value, op_exp);
+}
+
+KObj *k_rand(KObj *value) {
+  return apply_binary(value, value, op_rand1);
+}
+
 KObj *k_sin(KObj *value) {
   return apply_binary(value, value, op_sin);
 }
@@ -394,6 +582,22 @@ KObj *k_abs(KObj *value) {
 
 KObj *k_sqrt(KObj *value) {
   return apply_binary(value, value, op_sqrt);
+}
+
+KObj *k_pow(KObj *left, KObj *right) {
+  return apply_binary(left, right, op_pow);
+}
+
+KObj *k_log(KObj *value) {
+  return apply_binary(value, value, op_log);
+}
+
+KObj *k_logb(KObj *left, KObj *right) {
+  return apply_binary(left, right, op_logb);
+}
+
+KObj *k_randb(KObj *left, KObj *right) {
+  return apply_binary(left, right, op_rand2);
 }
 
 KObj *k_floor(KObj *value) {
@@ -412,7 +616,6 @@ KObj *k_not(KObj *value) {
 }
 
 static KObj *k_where_vector(KObj *vec) {
-  // First pass: validate and compute total output length
   size_t total = 0;
   for (size_t i = 0; i < vec->as.vector->length; i++) {
     KObj *item = &vec->as.vector->items[i];
@@ -422,7 +625,6 @@ static KObj *k_where_vector(KObj *vec) {
     int64_t count = as_int(item);
     if (count > 0) total += (size_t)count;
   }
-  // Allocate once and fill inline with ints
   KObj *result = create_vec(total);
   KObj *items = result->as.vector->items;
   size_t pos = 0;

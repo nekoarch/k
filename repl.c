@@ -217,17 +217,35 @@ void print(KObj *obj) {
     if (!simple && !all_strings) break;
   }
   if (simple) {
-    for (size_t i = 0; i < obj->as.vector->length; i++) {
-      char *s = kobj_to_string(&obj->as.vector->items[i]);
-      if (all_strings) {
-        printf("%s\n", s);
+    if (all_strings) {
+      int all_single_chars = 1;
+      for (size_t i = 0; i < obj->as.vector->length; i++) {
+        KObj *item = &obj->as.vector->items[i];
+        if (item->as.vector->length != 1) { all_single_chars = 0; break; }
+      }
+      if (all_single_chars) {
+        putchar('"');
+        for (size_t i = 0; i < obj->as.vector->length; i++) {
+          KObj *item = &obj->as.vector->items[i];
+          putchar(item->as.vector->items[0].as.char_value);
+        }
+        puts("\"");
       } else {
+        for (size_t i = 0; i < obj->as.vector->length; i++) {
+          char *s = kobj_to_string(&obj->as.vector->items[i]);
+          printf("%s\n", s);
+          free(s);
+        }
+      }
+    } else {
+      for (size_t i = 0; i < obj->as.vector->length; i++) {
+        char *s = kobj_to_string(&obj->as.vector->items[i]);
         printf("%s", s);
         if (i + 1 < obj->as.vector->length) putchar(' ');
+        free(s);
       }
-      free(s);
+      putchar('\n');
     }
-    if (!all_strings) putchar('\n');
     return;
   }
   size_t rows = obj->as.vector->length;

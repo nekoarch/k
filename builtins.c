@@ -1467,13 +1467,12 @@ KObj* k_scan(KObj* func, KObj* list, KObj* init) {
     printf("^type\n");
     return create_nil();
   }
-  KObj* res = create_vec(list->as.vector->length + (init ? 1 : 0));
+  KObj* res = create_vec(list->as.vector->length);
   size_t start = 0;
   KObj* acc = NULL;
   if (init) {
     retain_object(init);
     acc = init;
-    vector_append(res, acc);
   } else {
     if (list->as.vector->length == 0) return res;
     acc = &list->as.vector->items[0];

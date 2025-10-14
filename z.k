@@ -140,6 +140,7 @@ sum/1 2 3 4
 2\129
 16\255
 16\-255
+1+\!3
 / a full line comment ignored
 1+2 / trailing comment
 +/1 2 3 / comment after join

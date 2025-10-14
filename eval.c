@@ -403,18 +403,14 @@ assign_cleanup:
       release_object(fn);
       return result_obj;
     }
-    if (argn != 1) {
-      printf("^arity\n");
-      for (size_t i = 0; i < argn; i++) release_object(args[i]);
-      free(args);
-      release_object(fn);
-      return create_nil();
-    }
-    KObj *vec = fn;
-    KObj *idx = args[0];
-    KObj *result_obj = create_int(0);
-    if (vec->type == VECTOR) {
-      if (idx->type == INT || idx->type == FLOAT) {
+    KObj *current = fn;
+    for (size_t ai = 0; ai < argn; ai++) {
+      KObj *idx = args[ai];
+      KObj *next;
+      if (current->type != VECTOR) {
+        printf("^type\n");
+        next = create_nil();
+      } else if (idx->type == INT || idx->type == FLOAT) {
         size_t i = 0;
         if (idx->type == INT) {
           if (idx->as.int_value >= 0)
@@ -427,14 +423,17 @@ assign_cleanup:
           else
             i = (size_t)-1;
         }
-        if (i < vec->as.vector->length) {
-          result_obj = &vec->as.vector->items[i];
-          retain_object(result_obj);
+        if (i < current->as.vector->length) {
+          next = &current->as.vector->items[i];
+          retain_object(next);
+        } else {
+          next = create_int(0);
         }
       } else if (idx->type == VECTOR) {
         size_t idx_len = idx->as.vector->length;
         KObj *res = create_vec(idx_len);
-        size_t vec_len = vec->as.vector->length;
+        size_t vec_len = current->as.vector->length;
+        bool ok = true;
         for (size_t j = 0; j < idx_len; j++) {
           KObj *it = &idx->as.vector->items[j];
           int64_t id;
@@ -444,32 +443,37 @@ assign_cleanup:
             id = (int64_t)it->as.float_value;
           } else {
             printf("^type\n");
-            release_object(res);
-            result_obj = create_nil();
-            goto cleanup;
+            ok = false;
+            break;
           }
           if (id < 0 || (size_t)id >= vec_len) {
             printf("^length\n");
-            release_object(res);
-            result_obj = create_nil();
-            goto cleanup;
+            ok = false;
+            break;
           }
-          vector_append(res, &vec->as.vector->items[id]);
+          vector_append(res, &current->as.vector->items[id]);
         }
-        result_obj = res;
+        if (!ok) {
+          release_object(res);
+          next = create_nil();
+        } else {
+          next = res;
+        }
       } else {
         printf("^type\n");
-        result_obj = create_nil();
+        next = create_nil();
       }
-    } else {
-      printf("^type\n");
-      result_obj = create_nil();
+      release_object(idx);
+      release_object(current);
+      current = next;
+      if (current->type == NIL) {
+        for (size_t j = ai + 1; j < argn; j++) release_object(args[j]);
+        free(args);
+        return current;
+      }
     }
-cleanup:
-    release_object(vec);
-    release_object(idx);
     free(args);
-    return result_obj;
+    return current;
   }
   case AST_SEQ: {
     KObj *result = create_nil();

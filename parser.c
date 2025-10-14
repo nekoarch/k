@@ -90,7 +90,7 @@ static KObj *token_to_atom(Token token) {
 static KObj *token_to_verb(Token token) {
   const OpDesc *d = get_op_desc(token.type);
   if (!d || (!d->unary && !d->binary)) return NULL;
-  return create_verb(d->unary, d->binary);
+  return create_verb(d->unary, d->binary, token);
 }
 
 static void advance(Parser *parser) {
@@ -692,6 +692,32 @@ static ASTNode *parse_unary(Parser *parser) {
     return child;
   }
   if (count > 0) {
+    bool follows_expr = is_expr_start(parser->current.type) || peek_negative(parser) || peek_enumerate(parser);
+    if (!follows_expr && parser->current.type != LBRACKET) {
+      ASTNode *node = NULL;
+      if (count == 1) {
+        KObj *verb = token_to_verb(ops[0]);
+        if (verb) {
+          node = create_literal_node(verb);
+          release_object(verb);
+          free(ops);
+          return node;
+        }
+      }
+      KObj *symx = create_symbol("x");
+      ASTNode *body = create_literal_node(symx);
+      release_object(symx);
+      for (int i = count - 1; i >= 0; i--) {
+        body = create_unary_node(ops[i], body);
+      }
+      ASTNode **body_arr = (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *));
+      body_arr[0] = body;
+      KObj *lam = create_lambda(0, NULL, body_arr, 1, true);
+      ASTNode *lam_node = create_literal_node(lam);
+      release_object(lam);
+      free(ops);
+      return lam_node;
+    }
     ASTNode *child = parse_expression(parser);
     if (!child) {
       free(ops);

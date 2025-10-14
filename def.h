@@ -33,6 +33,7 @@ typedef struct KObj* (*BinaryFunc)(struct KObj*, struct KObj*);
 struct KVerb {
   UnaryFunc unary;
   BinaryFunc binary;
+  Token op; // for repl
 };
 
 struct KAdverb {
@@ -90,7 +91,7 @@ KObj *create_symbol(const char *name);
 KObj *create_dict(KObj *keys, KObj *values);
 KObj *create_lambda(int param_count, char **params, ASTNode **body,
                     size_t body_count, bool has_return);
-KObj *create_verb(UnaryFunc unary, BinaryFunc binary);
+KObj *create_verb(UnaryFunc unary, BinaryFunc binary, Token op);
 void vector_append(KObj *vec, KObj *item);
 void vector_set(KObj *vec, size_t index, KObj *src);
 #endif

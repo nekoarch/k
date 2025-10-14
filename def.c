@@ -192,9 +192,10 @@ KObj *create_lambda(int param_count, char **params, ASTNode **body,
   return obj;
 }
 
-KObj *create_verb(UnaryFunc unary, BinaryFunc binary) {
+KObj *create_verb(UnaryFunc unary, BinaryFunc binary, Token op) {
   KObj *obj = create_object(VERB);
   obj->as.verb.unary = unary;
   obj->as.verb.binary = binary;
+  obj->as.verb.op = op;
   return obj;
 }

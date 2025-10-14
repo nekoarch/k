@@ -27,6 +27,112 @@ static int is_char_vector(KObj *obj) {
 static char *kobj_to_string(KObj *obj);
 static void print_inline(KObj *obj);
 
+static const char *op_to_text(TokenType t) {
+  switch (t) {
+  case PLUS: return "+";
+  case MINUS: return "-";
+  case STAR: return "*";
+  case PERCENT: return "%";
+  case AMP: return "&";
+  case BAR: return "|";
+  case TILDE: return "~";
+  case CARET: return "^";
+  case EQUAL: return "=";
+  case COLON: return ":";
+  case LESS: return "<";
+  case MORE: return ">";
+  case BANG: return "!";
+  case HASH: return "#";
+  case UNDERSCORE: return "_";
+  case COMMA: return ",";
+  case SIN: return "sin";
+  case COS: return "cos";
+  case ABS: return "abs";
+  default: return "<verb>";
+  }
+}
+
+static char *ast_to_string(ASTNode *node);
+
+static char *concat3(const char *a, const char *b, const char *c) {
+  size_t la = strlen(a), lb = strlen(b), lc = strlen(c);
+  char *s = (char *)malloc(la + lb + lc + 1);
+  memcpy(s, a, la);
+  memcpy(s + la, b, lb);
+  memcpy(s + la + lb, c, lc);
+  s[la + lb + lc] = '\0';
+  return s;
+}
+
+static char *ast_to_string(ASTNode *node) {
+  if (!node) return k_strdup("<nil>");
+  switch (node->type) {
+  case AST_LITERAL: {
+    KObj *v = node->as.literal.value;
+    if (v->type == SYM) return k_strdup(v->as.symbol_value);
+    if (v->type == INT) {
+      char buf[64]; snprintf(buf, sizeof(buf), "%lld", (long long)v->as.int_value);
+      return k_strdup(buf);
+    }
+    if (v->type == FLOAT) {
+      char buf[64]; snprintf(buf, sizeof(buf), "%g", v->as.float_value);
+      return k_strdup(buf);
+    }
+    if (v->type == VECTOR) {
+      // string literal
+      int is_str = 1;
+      for (size_t i = 0; i < v->as.vector->length; i++) {
+        if (v->as.vector->items[i].type != CHAR) { is_str = 0; break; }
+      }
+      if (is_str) {
+        size_t n = v->as.vector->length;
+        char *s = (char *)malloc(n + 3);
+        s[0] = '"';
+        for (size_t i = 0; i < n; i++) s[1 + i] = v->as.vector->items[i].as.char_value;
+        s[1 + n] = '"'; s[2 + n] = '\0';
+        return s;
+      }
+    }
+    return k_strdup("<obj>");
+  }
+  case AST_UNARY: {
+    char *child = ast_to_string(node->as.unary.child);
+    const char *op = op_to_text(node->as.unary.op.type);
+    char *s = concat3(op, "", child);
+    free(child);
+    return s;
+  }
+  case AST_BINARY: {
+    char *l = ast_to_string(node->as.binary.left);
+    char *r = ast_to_string(node->as.binary.right);
+    const char *op = op_to_text(node->as.binary.op.type);
+    size_t ll = strlen(l), rl = strlen(r), ol = strlen(op);
+    char *s = (char *)malloc(ll + ol + rl + 1);
+    memcpy(s, l, ll);
+    memcpy(s + ll, op, ol);
+    memcpy(s + ll + ol, r, rl);
+    s[ll + ol + rl] = '\0';
+    free(l); free(r);
+    return s;
+  }
+  case AST_SEQ: {
+    // join with ';'
+    size_t n = node->as.seq.count;
+    if (n == 0) return k_strdup("");
+    char *s = ast_to_string(node->as.seq.items[0]);
+    for (size_t i = 1; i < n; i++) {
+      char *next = ast_to_string(node->as.seq.items[i]);
+      char *tmp = concat3(s, ";", next);
+      free(s); free(next);
+      s = tmp;
+    }
+    return s;
+  }
+  default:
+    return k_strdup("<expr>");
+  }
+}
+
 static char *vector_to_string(KObj *vec) {
   if (is_char_vector(vec)) {
     size_t len = vec->as.vector->length;
@@ -66,7 +172,7 @@ static char *vector_to_string(KObj *vec) {
 static char *kobj_to_string(KObj *obj) {
   if (!obj) return k_strdup("nil");
   char buf[64];
-    switch (obj->type) {
+  switch (obj->type) {
     case NIL:
       return k_strdup("");
     case INT:
@@ -84,6 +190,53 @@ static char *kobj_to_string(KObj *obj) {
       return k_strdup(buf);
     case VECTOR:
       return vector_to_string(obj);
+    case VERB: {
+      const char *op = op_to_text(obj->as.verb.op.type);
+      return k_strdup(op);
+    }
+    case LAMBDA: {
+      KLambda *lam = obj->as.lambda;
+      // Compute total length
+      size_t len = 2; // for {}
+      if (lam->param_count > 0) {
+        len += 2; // []
+        for (int i = 0; i < lam->param_count; i++) len += strlen(lam->params[i]);
+        len += (size_t)(lam->param_count > 1 ? lam->param_count - 1 : 0); // ; between params
+      }
+      char **bodies = NULL;
+      if (lam->body_count > 0) {
+        bodies = (char **)malloc(sizeof(char*) * lam->body_count);
+        for (size_t i = 0; i < lam->body_count; i++) {
+          bodies[i] = ast_to_string(lam->body[i]);
+          len += strlen(bodies[i]);
+          if (i + 1 < lam->body_count) len += 1; // ; between exprs
+        }
+      }
+      char *s = (char *)malloc(len + 1);
+      size_t pos = 0;
+      s[pos++] = '{';
+      if (lam->param_count > 0) {
+        s[pos++] = '[';
+        for (int i = 0; i < lam->param_count; i++) {
+          size_t l = strlen(lam->params[i]);
+          memcpy(s + pos, lam->params[i], l);
+          pos += l;
+          if (i + 1 < lam->param_count) s[pos++] = ';';
+        }
+        s[pos++] = ']';
+      }
+      for (size_t i = 0; i < lam->body_count; i++) {
+        size_t l = strlen(bodies[i]);
+        memcpy(s + pos, bodies[i], l);
+        pos += l;
+        if (i + 1 < lam->body_count) s[pos++] = ';';
+        free(bodies[i]);
+      }
+      if (bodies) free(bodies);
+      s[pos++] = '}';
+      s[pos] = '\0';
+      return s;
+    }
     case DICT: {
       KObj *keys = obj->as.dict->keys;
       KObj *vals = obj->as.dict->values;
@@ -312,7 +465,21 @@ static void execute(const char *p, int print_result) {
   ASTNode *ast_root = parse(&parser);
   if (ast_root) {
     KObj *result = evaluate(ast_root);
-    if (print_result) {
+    int suppress = 0;
+    if (ast_root->type == AST_BINARY && ast_root->as.binary.op.type == COLON) {
+      suppress = 1;
+    }
+    if (ast_root->type == AST_SEQ) {
+      int all_assign = 1;
+      for (size_t i = 0; i < ast_root->as.seq.count; i++) {
+        ASTNode *n = ast_root->as.seq.items[i];
+        if (!(n->type == AST_BINARY && n->as.binary.op.type == COLON)) {
+          all_assign = 0; break;
+        }
+      }
+      if (all_assign) suppress = 1;
+    }
+    if (print_result && !suppress) {
       print(result);
     }
     release_object(result);

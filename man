@@ -7,10 +7,10 @@ Verb      (monad)          Adverb
 * *        first        [y]f\ scan   c\ split   i\ encode
 % div      sqrt
 & where    min/and        i/o                   System
-| reverse  max/or        ^0: r/w line           \  man
-< asc      less          ^1: r/w file           \v var
-> desc     more          ^2: r/w csv            \t time
-= group    equal                                \\ exit
+| reverse  max/or        ^0: r/w line           \     man
+< asc      less          ^1: r/w file           \v    var
+> desc     more          ^2: r/w csv            \t[n] time
+= group    equal                                \\    exit
 ~ match    not            cf
 ! key      enum           $[b;t;f] cond
 , concat   enlist

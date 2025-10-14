@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
+#include <limits.h>
 #include <stdbool.h>
 #include "parser.h"
 #include "def.h"
@@ -76,17 +78,97 @@ static KObj *token_to_number(Token token) {
     if (token.start[0] == '-') return create_ninf();
     return create_pinf();
   }
-  bool is_float = false;
-  for (int i = 0; i < token.length; i++) {
-    char ch = token.start[i];
-    if (ch == '.' || ch == 'e' || ch == 'E') { is_float = true; break; }
+
+  const char *s = token.start;
+  int len = token.length;
+
+  int i = 0;
+  int sign = 1;
+  if (i < len && (s[i] == '+' || s[i] == '-')) { if (s[i] == '-') sign = -1; i++; }
+
+  int64_t mant = 0;
+  bool mant_overflow = false;
+  bool saw_digit = false;
+  bool saw_dot = false;
+  int frac_digits = 0;
+  for (; i < len; i++) {
+    char ch = s[i];
+    if (ch == '.') { if (saw_dot) break; saw_dot = true; continue; }
+    if (ch == 'e' || ch == 'E' || ch == 'w' || ch == 'W') break;
+    if (!isdigit((unsigned char)ch)) break;
+    saw_digit = true;
+    int d = ch - '0';
+    if (!mant_overflow) {
+      if (mant > (INT64_MAX - d) / 10) {
+        mant_overflow = true;
+      } else {
+        mant = mant * 10 + d;
+      }
+    }
+    if (saw_dot) frac_digits++;
   }
-  if (is_float) {
-    double val = strtod(token.start, NULL);
-    return create_float(val);
+
+  long exp_val = 0;
+  int exp_sign = 1;
+  bool has_exp = false;
+  if (i < len && (s[i] == 'e' || s[i] == 'E')) {
+    has_exp = true;
+    i++;
+    if (i < len && (s[i] == '+' || s[i] == '-')) { if (s[i] == '-') exp_sign = -1; i++; }
+    bool exp_digits = false;
+    while (i < len && isdigit((unsigned char)s[i])) {
+      exp_digits = true;
+      int d = s[i] - '0';
+      if (exp_val > (LONG_MAX - d) / 10) {
+        exp_val = LONG_MAX;
+      } else {
+        exp_val = exp_val * 10 + d;
+      }
+      i++;
+    }
+    if (!exp_digits) {
+      has_exp = false; //?
+    }
   }
-  int64_t val = strtoll(token.start, NULL, 10);
-  return create_int(val);
+  long net_exp = (long)exp_sign * exp_val - (long)frac_digits;
+
+  if (!saw_dot && !has_exp && saw_digit && !mant_overflow) {
+    if (sign < 0) mant = -mant;
+    return create_int(mant);
+  }
+
+  static const int64_t pow10[] = {
+    1LL, 10LL, 100LL, 1000LL, 10000LL, 100000LL, 1000000LL, 10000000LL, 100000000LL,
+    1000000000LL, 10000000000LL, 100000000000LL, 1000000000000LL, 10000000000000LL,
+    100000000000000LL, 1000000000000000LL, 10000000000000000LL, 100000000000000000LL,
+    1000000000000000000LL
+  };
+
+  if (saw_digit && !mant_overflow && net_exp >= 0 && net_exp <= 18) {
+    int64_t mul = pow10[net_exp];
+    if (mant <= INT64_MAX / mul) {
+      int64_t val = mant * mul;
+      if (sign < 0) val = -val;
+      return create_int(val);
+    }
+  }
+  if (saw_digit && !mant_overflow && net_exp < 0) {
+    long k = -net_exp;
+    if (k <= 18) {
+      int64_t div = pow10[k];
+      if (mant % div == 0) {
+        int64_t val = mant / div;
+        if (sign < 0) val = -val;
+        return create_int(val);
+      }
+    }
+  }
+  char *buf = (char *)malloc((size_t)token.length + 1);
+  memcpy(buf, token.start, (size_t)token.length);
+  buf[token.length] = '\0';
+  double f = strtod(buf, NULL);
+  free(buf);
+  return create_float(f);
 }
 
 static KObj *token_to_string(Token token) {

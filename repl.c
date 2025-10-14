@@ -470,31 +470,77 @@ static void execute(const char *p, int print_result) {
   }
 }
 
-int run_file(const char *filename) {
-  FILE *f = fopen(filename, "r");
-  if (!f) {
-    printf("^io\n");
+static long long monotonic_ns(void) {
+  struct timespec ts;
+#ifdef CLOCK_MONOTONIC
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+#else
+  ts.tv_sec = 0;
+  ts.tv_nsec = (long)(clock() * (1000000000.0 / CLOCKS_PER_SEC));
+#endif
+  return (long long)ts.tv_sec * 1000000000LL + (long long)ts.tv_nsec;
+}
+
+static void time_and_print_average(const char *expr, long runs, int repl_prompt) {
+  if (runs <= 0) runs = 1;
+  long long total_ns = 0;
+  for (long i = 0; i < runs; i++) {
+    long long start = monotonic_ns();
+    execute(expr, 0);
+    long long end = monotonic_ns();
+    total_ns += (end - start);
+  }
+  long long avg_ms = total_ns / runs / 1000000LL;
+  if (repl_prompt)
+    printf("%lld\n  ", avg_ms);
+  else
+    printf("%lld\n", avg_ms);
+}
+
+static void parse_timing_args(char *q, long *runs_out, char **expr_out) {
+  long runs = 1;
+  char *expr = q;
+  if (*q >= '0' && *q <= '9') {
+    char *digits_start = q;
+    long tmp = 0;
+    while (*q >= '0' && *q <= '9') { tmp = tmp * 10 + (*q - '0'); q++; }
+    if (*q == ' ' || *q == '\t') {
+      while (*q == ' ' || *q == '\t') q++;
+      runs = tmp;
+      expr = q;
+    } else {
+      expr = digits_start;
+    }
+  } else {
+    while (*expr == ' ' || *expr == '\t') expr++;
+  }
+  *runs_out = runs;
+  *expr_out = expr;
+}
+
+static int process_line(char *p, int interactive) {
+  if (*p == '\0') { if (interactive) printf("  "); return 1; }
+  if (strcmp(p, "\\\\") == 0) { return 0; }
+  if (strcmp(p, "\\") == 0) { if (interactive) printf("man nyi\n  "); return 1; }
+  if (strcmp(p, "\\v") == 0) { env_dump(); if (interactive) printf("  "); return 1; }
+  if (strncmp(p, "\\t", 2) == 0) {
+    char *q = p + 2; long runs = 1; char *expr = q; parse_timing_args(q, &runs, &expr);
+    if (*expr == '\0') { if (interactive) printf("0\n  "); else printf("0\n"); return 1; }
+    time_and_print_average(expr, runs, interactive);
     return 1;
   }
+  execute(p, 1);
+  if (interactive) printf("  ");
+  return 1;
+}
+
+int run_file(const char *filename) {
+  FILE *f = fopen(filename, "r");
+  if (!f) { printf("^io\n"); return 1; }
   char line[1024];
   while (fgets(line, sizeof(line), f)) {
     char *p = trim_line(line);
-    if (*p == '\0') continue;
-    if (strcmp(p, "\\v") == 0) {
-      env_dump();
-      continue;
-    }
-    if (strncmp(p, "\\t", 2) == 0 && (p[2] == '\0' || p[2] == ' ')) {
-      char *expr = p + 2;
-      while (*expr == ' ') expr++;
-      clock_t start = clock();
-      execute(expr, 0);
-      clock_t end = clock();
-      long long ms = (long long)(end - start) * 1000 / CLOCKS_PER_SEC;
-      printf("%lld\n", ms);
-      continue;
-    }
-    execute(p, 1);
+    (void)process_line(p, 0);
   }
   fclose(f);
   return 0;
@@ -505,33 +551,6 @@ void run_repl(void) {
   printf("neko/k "__DATE__"\n  ");
   while (fgets(line, sizeof(line), stdin)) {
     char *p = trim_line(line);
-    if (*p == '\0') {
-      printf("  ");
-      continue;
-    }
-    if (strcmp(p, "\\\\") == 0) {
-      break;
-    }
-    if (strcmp(p, "\\") == 0) {
-      printf("man nyi\n  ");
-      continue;
-    }
-    if (strcmp(p, "\\v") == 0) {
-      env_dump();
-      printf("  ");
-      continue;
-    }
-    if (strncmp(p, "\\t", 2) == 0 && (p[2] == '\0' || p[2] == ' ')) {
-      char *expr = p + 2;
-      while (*expr == ' ') expr++;
-      clock_t start = clock();
-      execute(expr, 0);
-      clock_t end = clock();
-      long long ms = (long long)(end - start) * 1000 / CLOCKS_PER_SEC;
-      printf("%lld\n  ", ms);
-      continue;
-    }
-    execute(p, 1);
-    printf("  ");
+    if (!process_line(p, 1)) break;
   }
 }

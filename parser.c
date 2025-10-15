@@ -193,7 +193,7 @@ static KObj *token_to_atom(Token token) {
   switch (token.type) {
   case NUMBER: return token_to_number(token);
   case STRING: return token_to_string(token);
-  case IDENT:  return token_to_symbol(token);
+  case SYMBOL: return token_to_symbol(token);
   default: return NULL;
   }
 }
@@ -210,13 +210,13 @@ static void advance(Parser *parser) {
 }
 
 static bool is_value_token(TokenType type) {
-  return type == NUMBER || type == IDENT || type == STRING ||
+  return type == NUMBER || type == IDENT || type == STRING || type == SYMBOL ||
          type == RPAREN || type == RBRACKET || type == RBRACE ||
          type == SIN || type == COS || type == ABS || type == EXP || type == LOG || type == RAND;
 }
 
 static bool is_expr_start(TokenType type) {
-  return type == NUMBER || type == IDENT || type == STRING || type == SIN ||
+  return type == NUMBER || type == IDENT || type == STRING || type == SYMBOL || type == SIN ||
          type == COS || type == ABS || type == DOLLAR || type == LPAREN ||
          type == LBRACKET || type == LBRACE;
 }
@@ -278,7 +278,7 @@ static bool consume_negative(Parser *parser, Token *out) {
 
 static bool read_atom(Parser *parser, Token *out) {
   if (parser->current.type == NUMBER || parser->current.type == STRING ||
-      parser->current.type == IDENT) {
+      parser->current.type == IDENT || parser->current.type == SYMBOL) {
     *out = parser->current;
     advance(parser);
     return true;
@@ -428,6 +428,13 @@ error:
 static ASTNode *parse_primary(Parser *parser) {
   Token tok;
   if (read_atom(parser, &tok)) {
+    if (tok.type == IDENT) {
+      // Variable reference
+      char *name = (char *)arena_alloc(&global_arena, tok.length + 1);
+      memcpy(name, tok.start, tok.length);
+      name[tok.length] = '\0';
+      return create_var_node(name);
+    }
     KObj *first_val = token_to_atom(tok);
     if (tok.type != IDENT) {
       Token next_tok;
@@ -519,6 +526,11 @@ static ASTNode *parse_postfix(Parser *parser) {
         !parser->current.ws_before) {
       Token op = parser->current;
       advance(parser);
+      if ((op.type == SLASH || op.type == BACKSLASH) &&
+          parser->current.type == COLON && !parser->current.ws_before) {
+        if (op.type == SLASH) op.type = SLASH_COLON; else op.type = BACKSLASH_COLON;
+        advance(parser);
+      }
       node = create_adverb_node(op, node);
       continue;
     }
@@ -753,9 +765,7 @@ static ASTNode *parse_unary(Parser *parser) {
           return node;
         }
       }
-      KObj *symx = create_symbol("x");
-      ASTNode *body = create_literal_node(symx);
-      release_object(symx);
+      ASTNode *body = create_var_node("x");
       for (int i = count - 1; i >= 0; i--) {
         body = create_unary_node(ops[i], body);
       }
@@ -803,6 +813,11 @@ static ASTNode* parse_expression(Parser* parser) {
         !parser->current.ws_before) {
       Token adv = parser->current;
       advance(parser);
+      if ((adv.type == SLASH || adv.type == BACKSLASH) &&
+          parser->current.type == COLON && !parser->current.ws_before) {
+        if (adv.type == SLASH) adv.type = SLASH_COLON; else adv.type = BACKSLASH_COLON;
+        advance(parser);
+      }
       ASTNode* right_node = parse_expression(parser);
       if (!right_node) return NULL;
       KObj *verb = token_to_verb(op);

@@ -50,7 +50,14 @@ static char *ast_to_string(ASTNode *node) {
   switch (node->type) {
   case AST_LITERAL: {
     KObj *v = node->as.literal.value;
-    if (v->type == SYM) return k_strdup(v->as.symbol_value);
+    if (v->type == SYM) {
+      size_t n = strlen(v->as.symbol_value);
+      char *s = (char *)malloc(n + 2);
+      s[0] = '`';
+      memcpy(s + 1, v->as.symbol_value, n);
+      s[n + 1] = '\0';
+      return s;
+    }
     if (v->type == INT) {
       char buf[64]; snprintf(buf, sizeof(buf), "%lld", (long long)v->as.int_value);
       return k_strdup(buf);
@@ -75,6 +82,9 @@ static char *ast_to_string(ASTNode *node) {
       }
     }
     return k_strdup("<obj>");
+  }
+  case AST_VAR: {
+    return k_strdup(node->as.var.name);
   }
   case AST_UNARY: {
     char *child = ast_to_string(node->as.unary.child);
@@ -169,6 +179,15 @@ static char *kobj_to_string(KObj *obj) {
     case CHAR:
       snprintf(buf, sizeof(buf), "%c", obj->as.char_value);
       return k_strdup(buf);
+    case SYM: {
+      const char *name = obj->as.symbol_value;
+      size_t n = strlen(name);
+      char *s = (char *)malloc(n + 2);
+      s[0] = '`';
+      memcpy(s + 1, name, n);
+      s[n + 1] = '\0';
+      return s;
+    }
     case VECTOR:
       return vector_to_string(obj);
     case VERB: {
@@ -284,7 +303,9 @@ static void print_inline(KObj *obj) {
       print_inline(&obj->as.vector->items[i]);
       if (i + 1 < n) {
         if (need_paren) putchar(';');
-        else putchar(' ');
+        else if (uniform && first_type == SYM) {
+          // No space between symbols
+        } else putchar(' ');
       }
     }
     if (need_paren) putchar(')');
@@ -304,9 +325,14 @@ void print(KObj *obj) {
     KObj *vals = obj->as.dict->values;
     size_t len = keys->as.vector->length;
     for (size_t i = 0; i < len; i++) {
-      char *k = kobj_to_string(&keys->as.vector->items[i]);
-      printf("%s|", k);
-      free(k);
+      KObj *key_obj = &keys->as.vector->items[i];
+      if (key_obj->type == SYM) {
+        printf("%s|", key_obj->as.symbol_value);
+      } else {
+        char *k = kobj_to_string(key_obj);
+        printf("%s|", k);
+        free(k);
+      }
       KObj *v = &vals->as.vector->items[i];
       if (v->type == VECTOR && !is_char_vector(v)) {
         size_t l = v->as.vector->length;
@@ -340,6 +366,7 @@ void print(KObj *obj) {
   }
   int simple = 1;
   int all_strings = 1;
+  int all_syms = 1;
   for (size_t i = 0; i < obj->as.vector->length; i++) {
     KObj *item = &obj->as.vector->items[i];
     if (item->type == VECTOR && !is_char_vector(item)) {
@@ -347,6 +374,9 @@ void print(KObj *obj) {
     }
     if (item->type != VECTOR || !is_char_vector(item)) {
       all_strings = 0;
+    }
+    if (item->type != SYM) {
+      all_syms = 0;
     }
     if (!simple && !all_strings) break;
   }
@@ -375,7 +405,7 @@ void print(KObj *obj) {
       for (size_t i = 0; i < obj->as.vector->length; i++) {
         char *s = kobj_to_string(&obj->as.vector->items[i]);
         printf("%s", s);
-        if (i + 1 < obj->as.vector->length) putchar(' ');
+        if (!all_syms && i + 1 < obj->as.vector->length) putchar(' ');
         free(s);
       }
       putchar('\n');

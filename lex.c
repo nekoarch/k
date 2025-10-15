@@ -80,6 +80,23 @@ static Token read_string(Lexer *lexer) {
   return token;
 }
 
+static int is_symbol_terminator(char c) {
+  if (c == '\0') return 1;
+  if (strchr(" \r\t\n()[]{};", c)) return 1;
+  if (strchr("+-*%&|~^=<>!#_,/\\'$", c)) return 1;
+  return 0;
+}
+
+static Token read_symbol(Lexer *lexer) {
+  while (*lexer->current && !is_symbol_terminator(*lexer->current) && *lexer->current != '`') {
+    advance(lexer);
+  }
+  Token token = make_token(lexer, SYMBOL);
+  token.start++;
+  token.length -= 1;
+  return token;
+}
+
 static Token read_ident(Lexer *lexer) {
   while (isalnum(*lexer->current)) advance(lexer);
   Token token = make_token(lexer, IDENT);
@@ -93,6 +110,7 @@ Token scan_token(Lexer* lexer) {
   lexer->start = lexer->current;
   if (at_end(lexer)) return make_token(lexer, KEOF);
   char c = advance(lexer);
+  if (c == '`') return read_symbol(lexer);
   if (isdigit(c)) return read_number(lexer);
   if (c == '.' && isdigit(*lexer->current)) return read_number(lexer);
   if (c == '"') return read_string(lexer);

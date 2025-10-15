@@ -1156,27 +1156,62 @@ KObj* k_count(KObj* value) {
 }
 
 KObj *k_key(KObj *left, KObj *right) {
-  if (left->type != VECTOR || right->type != VECTOR) {
-    printf("^domain\n");
-    return create_nil();
+  if (left->type != VECTOR) {
+    if (left->type == DICT || left->type == VERB || left->type == ADVERB || left->type == LAMBDA) {
+      printf("^domain\n");
+      return create_nil();
+    }
+    KObj *keys = create_vec(1);
+    vector_append(keys, left);
+    KObj *vals = create_vec(1);
+    vector_append(vals, right);
+    KObj *dict = create_dict(keys, vals);
+    release_object(keys);
+    release_object(vals);
+    return dict;
   }
-  if (left->as.vector->length != right->as.vector->length) {
-    printf("^length\n");
-    return create_nil();
-  }
-  size_t len = left->as.vector->length;
-  for (size_t i = 0; i < len; i++) {
+
+  size_t n = left->as.vector->length;
+  for (size_t i = 0; i < n; i++) {
     KObj *lk = &left->as.vector->items[i];
-    KObj *rv = &right->as.vector->items[i];
     if (lk->type == VECTOR || lk->type == DICT || lk->type == VERB ||
-        lk->type == ADVERB || lk->type == LAMBDA ||
-        rv->type == VECTOR || rv->type == DICT || rv->type == VERB ||
-        rv->type == ADVERB || rv->type == LAMBDA) {
+        lk->type == ADVERB || lk->type == LAMBDA) {
       printf("^domain\n");
       return create_nil();
     }
   }
-  return create_dict(left, right);
+
+  if (right->type == VECTOR) {
+    size_t m = right->as.vector->length;
+    if (m == n) {
+      return create_dict(left, right);
+    }
+    if (m == 1) {
+      // Broadcast single value to all keys
+      KObj *vals = create_vec(n);
+      KObj *single = &right->as.vector->items[0];
+      for (size_t i = 0; i < n; i++) {
+        vector_append(vals, single);
+      }
+      KObj *dict = create_dict(left, vals);
+      release_object(vals);
+      return dict;
+    }
+    printf("^length\n");
+    return create_nil();
+  }
+
+  if (right->type == DICT || right->type == VERB || right->type == ADVERB || right->type == LAMBDA) {
+    printf("^domain\n");
+    return create_nil();
+  }
+  KObj *vals = create_vec(n);
+  for (size_t i = 0; i < n; i++) {
+    vector_append(vals, right);
+  }
+  KObj *dict = create_dict(left, vals);
+  release_object(vals);
+  return dict;
 }
 
 static KObj* take_n(int64_t n, KObj* src) {

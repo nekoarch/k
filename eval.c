@@ -83,8 +83,6 @@ void env_dump() {
 static KObj *eval_literal(KObj *obj) {
   if (!obj) return create_nil();
   switch (obj->type) {
-  case SYM:
-    return env_get(obj->as.symbol_value);
   case VECTOR: {
     KObj *res = create_vec(obj->as.vector->length);
     for (size_t i = 0; i < obj->as.vector->length; i++) {
@@ -114,6 +112,9 @@ KObj* evaluate(ASTNode *node) {
   case AST_LITERAL: {
     return eval_literal(node->as.literal.value);
   }
+  case AST_VAR: {
+    return env_get(node->as.var.name);
+  }
   case AST_UNARY: {
     KObj *val = evaluate(node->as.unary.child);
     if (val->type == NIL) {
@@ -133,9 +134,8 @@ KObj* evaluate(ASTNode *node) {
 
   case AST_BINARY: {
     if (node->as.binary.op.type == COLON) {
-      if (node->as.binary.left->type == AST_LITERAL &&
-          node->as.binary.left->as.literal.value->type == SYM) {
-        const char *name = node->as.binary.left->as.literal.value->as.symbol_value;
+      if (node->as.binary.left->type == AST_VAR) {
+        const char *name = node->as.binary.left->as.var.name;
         KObj *right_val = evaluate(node->as.binary.right);
         if (right_val->type == NIL) {
           return right_val;
@@ -145,10 +145,9 @@ KObj* evaluate(ASTNode *node) {
       }
       if (node->as.binary.left->type == AST_CALL) {
         ASTNode *call = node->as.binary.left;
-        if (call->as.call.callee->type == AST_LITERAL &&
-            call->as.call.callee->as.literal.value->type == SYM &&
+        if (call->as.call.callee->type == AST_VAR &&
             call->as.call.arg_count == 1) {
-          const char *name = call->as.call.callee->as.literal.value->as.symbol_value;
+          const char *name = call->as.call.callee->as.var.name;
           KObj *vec = env_get(name);
           if (vec->type != VECTOR) {
             if (vec->type != NIL) printf("^type\n");
@@ -233,10 +232,9 @@ KObj* evaluate(ASTNode *node) {
             return create_nil();
           }
         }
-        if (call->as.call.callee->type == AST_LITERAL &&
-            call->as.call.callee->as.literal.value->type == SYM &&
+        if (call->as.call.callee->type == AST_VAR &&
             call->as.call.arg_count >= 2) {
-          const char *name = call->as.call.callee->as.literal.value->as.symbol_value;
+          const char *name = call->as.call.callee->as.var.name;
           KObj *vec = env_get(name);
           if (vec->type != VECTOR) {
             if (vec->type != NIL) printf("^type\n");
@@ -261,7 +259,6 @@ KObj* evaluate(ASTNode *node) {
               return create_nil();
             }
           }
-          // Traverse to the container vector for the last index
           KObj *container = vec;
           for (size_t i = 0; i + 1 < argc; i++) {
             if (container->type != VECTOR) {
@@ -380,9 +377,7 @@ KObj* evaluate(ASTNode *node) {
       for (size_t i = 0; i < argn; i++) {
         ASTNode *a = node->as.call.args[i];
         if (a && a->type == AST_BINARY && a->as.binary.op.type == COLON &&
-            a->as.binary.left && a->as.binary.left->type == AST_LITERAL &&
-            a->as.binary.left->as.literal.value &&
-            a->as.binary.left->as.literal.value->type == SYM) {
+            a->as.binary.left && a->as.binary.left->type == AST_VAR) {
           assign_idx = i;
           break;
         }
@@ -481,10 +476,83 @@ KObj* evaluate(ASTNode *node) {
           printf("^type (each)\n");
           result = create_nil();
         }
+      } else if (fn->as.adverb->op.type == SLASH_COLON) {
+        if (!(child->type == VERB || child->type == LAMBDA)) {
+          printf("^type (eachright)\n");
+          result = create_nil();
+        } else if (argn != 2) {
+          printf("^rank (eachright)\n");
+          result = create_nil();
+        } else {
+          KObj *left = args[0];
+          KObj *right = args[1];
+          if (right->type == VECTOR) {
+            size_t len = right->as.vector->length;
+            KObj *res = create_vec(len);
+            for (size_t i = 0; i < len; i++) {
+              KObj *elem = &right->as.vector->items[i];
+              KObj *val = NULL;
+              if (child->type == VERB && child->as.verb.binary) {
+                val = child->as.verb.binary(left, elem);
+              } else {
+                KObj *call_args[2] = { left, elem };
+                val = call_n(child, call_args, 2);
+              }
+              if (val->type == NIL) { release_object(res); result = val; goto adv_done; }
+              vector_append(res, val);
+              release_object(val);
+            }
+            result = res;
+          } else {
+            if (child->type == VERB && child->as.verb.binary) {
+              result = child->as.verb.binary(left, right);
+            } else {
+              KObj *call_args[2] = { left, right };
+              result = call_n(child, call_args, 2);
+            }
+          }
+        }
+      } else if (fn->as.adverb->op.type == BACKSLASH_COLON) {
+        if (!(child->type == VERB || child->type == LAMBDA)) {
+          printf("^type (eachleft)\n");
+          result = create_nil();
+        } else if (argn != 2) {
+          printf("^rank (eachleft)\n");
+          result = create_nil();
+        } else {
+          KObj *left = args[0];
+          KObj *right = args[1];
+          if (left->type == VECTOR) {
+            size_t len = left->as.vector->length;
+            KObj *res = create_vec(len);
+            for (size_t i = 0; i < len; i++) {
+              KObj *elem = &left->as.vector->items[i];
+              KObj *val = NULL;
+              if (child->type == VERB && child->as.verb.binary) {
+                val = child->as.verb.binary(elem, right);
+              } else {
+                KObj *call_args[2] = { elem, right };
+                val = call_n(child, call_args, 2);
+              }
+              if (val->type == NIL) { release_object(res); result = val; goto adv_done; }
+              vector_append(res, val);
+              release_object(val);
+            }
+            result = res;
+          } else {
+            if (child->type == VERB && child->as.verb.binary) {
+              result = child->as.verb.binary(left, right);
+            } else {
+              KObj *call_args[2] = { left, right };
+              result = call_n(child, call_args, 2);
+            }
+          }
+        }
       } else {
         printf("^nyi\n");
         result = create_nil();
       }
+adv_done:
       for (size_t i = 0; i < argn; i++) release_object(args[i]);
       free(args);
       release_object(fn);

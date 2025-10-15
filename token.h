@@ -18,6 +18,8 @@ typedef enum {
   UNDERSCORE,
   SLASH,
   BACKSLASH,
+  SLASH_COLON,
+  BACKSLASH_COLON,
   TICK,
   LESS,
   MORE,
@@ -41,6 +43,7 @@ typedef enum {
   NUMBER,
   IDENT,
   STRING,
+  SYMBOL,
   ERROR,
   KEOF
 } TokenType;

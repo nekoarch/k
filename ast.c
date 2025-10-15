@@ -118,6 +118,13 @@ ASTNode *create_adverb_node(Token op, ASTNode *child) {
   return node;
 }
 
+ASTNode *create_var_node(const char *name) {
+  ASTNode *node = (ASTNode *)arena_alloc(&global_arena, sizeof(ASTNode));
+  node->type = AST_VAR;
+  node->as.var.name = name;
+  return node;
+}
+
 void free_ast(ASTNode *node) {
   if (node == NULL) {
     return;
@@ -152,6 +159,8 @@ void free_ast(ASTNode *node) {
   break;
   case AST_ADVERB:
     free_ast(node->as.adverb.child);
+  break;
+  case AST_VAR:
   break;
   }
 }

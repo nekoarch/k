@@ -12,6 +12,7 @@ typedef enum {
   AST_LIST,
   AST_CONDITIONAL,
   AST_ADVERB,
+  AST_VAR,
 } ASTNodeType;
 
 typedef struct ASTNode {
@@ -47,6 +48,9 @@ typedef struct ASTNode {
       Token op;
       struct ASTNode *child;
     } adverb;
+    struct {
+      const char *name;
+    } var;
   } as;
 } ASTNode;
 
@@ -58,6 +62,7 @@ ASTNode *create_seq_node(ASTNode **items, size_t count);
 ASTNode *create_list_node(ASTNode **items, size_t count);
 ASTNode *create_conditional_node(ASTNode *condition, ASTNode *then_branch, ASTNode *else_branch);
 ASTNode *create_adverb_node(Token op, ASTNode *child);
+ASTNode *create_var_node(const char *name);
 void free_ast(ASTNode *node);
 
 #endif

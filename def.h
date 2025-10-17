@@ -16,7 +16,8 @@ typedef enum {
   DICT,   // dict
   VERB,   // +-*%
   ADVERB, // '\/
-  LAMBDA  // user-defined
+  LAMBDA, // user-defined
+  PROJ    // projection
 } KType;
 
 typedef struct KObj KObj;
@@ -26,6 +27,13 @@ typedef struct ASTNode ASTNode;
 typedef struct KLambda KLambda;
 typedef struct KVerb KVerb;
 typedef struct KAdverb KAdverb;
+typedef struct KProj KProj;
+struct KProj {
+  KObj *fn;
+  size_t arity;
+  size_t argn;
+  KObj **args;
+};
 
 typedef struct KObj* (*UnaryFunc)(struct KObj*);
 typedef struct KObj* (*BinaryFunc)(struct KObj*, struct KObj*);
@@ -73,6 +81,7 @@ struct KObj {
     KLambda *lambda;
     KVerb verb;
     KAdverb *adverb;
+    KProj *proj;
   } as;
 };
 
@@ -94,4 +103,5 @@ KObj *create_lambda(int param_count, char **params, ASTNode **body,
 KObj *create_verb(UnaryFunc unary, BinaryFunc binary, Token op);
 void vector_append(KObj *vec, KObj *item);
 void vector_set(KObj *vec, size_t index, KObj *src);
+KObj *create_projection(KObj *fn, KObj **args, size_t argn, size_t arity);
 #endif

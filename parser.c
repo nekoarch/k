@@ -429,7 +429,6 @@ static ASTNode *parse_primary(Parser *parser) {
   Token tok;
   if (read_atom(parser, &tok)) {
     if (tok.type == IDENT) {
-      // Variable reference
       char *name = (char *)arena_alloc(&global_arena, tok.length + 1);
       memcpy(name, tok.start, tok.length);
       name[tok.length] = '\0';
@@ -437,16 +436,19 @@ static ASTNode *parse_primary(Parser *parser) {
     }
     KObj *first_val = token_to_atom(tok);
     if (tok.type != IDENT) {
-      Token next_tok;
-      if (read_atom(parser, &next_tok)) {
+      if (parser->current.type == NUMBER || parser->current.type == STRING ||
+          parser->current.type == SYMBOL || peek_negative(parser)) {
         KObj *vec = create_vec(8);
         vector_append(vec, first_val);
         release_object(first_val);
-        KObj *val = token_to_atom(next_tok);
-        vector_append(vec, val);
-        release_object(val);
-        while (read_atom(parser, &next_tok)) {
-          val = token_to_atom(next_tok);
+        while (parser->current.type == NUMBER || parser->current.type == STRING ||
+               parser->current.type == SYMBOL || peek_negative(parser)) {
+          Token next_tok;
+          (void)read_atom(parser, &next_tok);
+          KObj *val = token_to_atom(next_tok);
+          if (!val) {
+            return create_literal_node(vec);
+          }
           vector_append(vec, val);
           release_object(val);
         }
@@ -578,6 +580,7 @@ static ASTNode *parse_postfix(Parser *parser) {
       advance(parser); // [ or (
       ASTNode **args = NULL;
       size_t arg_count = 0;
+      size_t arg_cap = 0;
       if (!parse_args_until(parser, closing, &args, &arg_count)) {
         free_ast(node);
         goto arg_error;
@@ -588,6 +591,30 @@ static ASTNode *parse_postfix(Parser *parser) {
         goto arg_error;
       }
       advance(parser); // ] or )
+      if (!paren_call) {
+        while (parser->current.type == LBRACKET) {
+          advance(parser); // [
+          ASTNode **more = NULL; size_t more_n = 0;
+          if (!parse_args_until(parser, RBRACKET, &more, &more_n)) {
+            free_ast(node);
+            goto arg_error;
+          }
+          if (parser->current.type != RBRACKET) {
+            printf("^error: ] \n");
+            free_ast(node);
+            goto arg_error;
+          }
+          advance(parser); // ]
+          if (more_n > 0) {
+            size_t new_n = arg_count + more_n;
+            ASTNode **combined = (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *) * new_n);
+            if (arg_count > 0 && args) memcpy(combined, args, arg_count * sizeof(ASTNode *));
+            memcpy(combined + arg_count, more, more_n * sizeof(ASTNode *));
+            args = combined;
+            arg_count = new_n;
+          }
+        }
+      }
       if (paren_call && arg_count > 1) {
         KObj *vec = create_vec(arg_count);
         for (size_t i = 0; i < arg_count; i++) {
@@ -634,6 +661,19 @@ arg_error:
       if (!arg) {
         free_ast(node);
         return NULL;
+      }
+      // A g/\ B
+      if (arg->type == AST_CALL && arg->as.call.callee &&
+          arg->as.call.callee->type == AST_ADVERB && arg->as.call.arg_count == 1 &&
+          (arg->as.call.callee->as.adverb.op.type == SLASH ||
+           arg->as.call.callee->as.adverb.op.type == BACKSLASH)) {
+        ASTNode *adverb = arg->as.call.callee;
+        ASTNode *right = arg->as.call.args[0];
+        ASTNode **call_args = (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *) * 2);
+        call_args[0] = node;
+        call_args[1] = right;
+        node = create_call_node(adverb, call_args, 2);
+        continue;
       }
       ASTNode **args = (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *));
       args[0] = arg;

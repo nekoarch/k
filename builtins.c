@@ -1500,7 +1500,7 @@ KObj* k_each(KObj* func, KObj* left, KObj* right) {
           return create_nil();
         }
         val = func->as.verb.unary(item);
-      } else if (func->type == LAMBDA) {
+      } else if (func->type == LAMBDA || func->type == PROJ) {
         val = call_unary(func, item);
       } else {
         release_object(res);
@@ -1533,7 +1533,7 @@ KObj* k_each(KObj* func, KObj* left, KObj* right) {
     KObj* val = NULL;
     if (func->type == VERB && func->as.verb.binary) {
       val = func->as.verb.binary(l, r);
-    } else if (func->type == LAMBDA) {
+    } else if (func->type == LAMBDA || func->type == PROJ) {
       val = call_binary(func, l, r);
     } else {
       release_object(res);
@@ -1602,7 +1602,7 @@ KObj* k_each_n(KObj* func, KObj** args, size_t argn) {
         printf("^rank\n");
         return create_nil();
       }
-    } else if (func->type == LAMBDA) {
+    } else if (func->type == LAMBDA || func->type == PROJ) {
       val = call_n(func, call_args, argn);
     } else {
       free(call_args);
@@ -1644,7 +1644,7 @@ KObj* k_over(KObj* func, KObj* list, KObj* init) {
     KObj* next = NULL;
     if (func->type == VERB && func->as.verb.binary) {
       next = func->as.verb.binary(result, item);
-    } else if (func->type == LAMBDA) {
+    } else if (func->type == LAMBDA || func->type == PROJ) {
       next = call_binary(func, result, item);
     } else {
       printf("^type\n");
@@ -1793,7 +1793,7 @@ KObj* k_scan(KObj* func, KObj* list, KObj* init) {
     KObj* next = NULL;
     if (func->type == VERB && func->as.verb.binary) {
       next = func->as.verb.binary(acc, item);
-    } else if (func->type == LAMBDA) {
+    } else if (func->type == LAMBDA || func->type == PROJ) {
       next = call_binary(func, acc, item);
     } else {
       printf("^type\n");

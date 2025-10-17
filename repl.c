@@ -194,6 +194,38 @@ static char *kobj_to_string(KObj *obj) {
       const char *op = op_to_text(obj->as.verb.op.type);
       return k_strdup(op);
     }
+    case PROJ: {
+      KProj *p = obj->as.proj;
+      // Render underlying function
+      char *fn = kobj_to_string(p->fn);
+      size_t len = strlen(fn) + 2; // []
+      char **parts = NULL;
+      if (p->argn > 0) {
+        parts = (char **)malloc(sizeof(char*) * p->argn);
+        for (size_t i = 0; i < p->argn; i++) {
+          parts[i] = kobj_to_string(p->args[i]);
+          len += strlen(parts[i]);
+          if (i + 1 < p->argn) len += 1; // ';'
+        }
+      }
+      char *s = (char *)malloc(len + 1);
+      size_t pos = 0;
+      size_t lfn = strlen(fn);
+      memcpy(s + pos, fn, lfn); pos += lfn;
+      s[pos++] = '[';
+      for (size_t i = 0; i < p->argn; i++) {
+        size_t la = strlen(parts[i]);
+        memcpy(s + pos, parts[i], la);
+        pos += la;
+        if (i + 1 < p->argn) s[pos++] = ';';
+        free(parts[i]);
+      }
+      if (parts) free(parts);
+      s[pos++] = ']';
+      s[pos] = '\0';
+      free(fn);
+      return s;
+    }
     case LAMBDA: {
       KLambda *lam = obj->as.lambda;
       // Compute total length

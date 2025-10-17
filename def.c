@@ -51,6 +51,17 @@ void release_object(KObj *obj) {
     case ADVERB:
       release_object(obj->as.adverb->child);
     break;
+    case PROJ:
+      if (obj->as.proj) {
+        if (obj->as.proj->fn) release_object(obj->as.proj->fn);
+        if (obj->as.proj->args) {
+          for (size_t i = 0; i < obj->as.proj->argn; i++) {
+            if (obj->as.proj->args[i]) release_object(obj->as.proj->args[i]);
+          }
+          free(obj->as.proj->args);
+        }
+      }
+    break;
     default:
     break;
     }
@@ -144,6 +155,15 @@ static void retain_subobjects(KObj *obj) {
   case ADVERB:
     retain_object(obj->as.adverb->child);
   break;
+  case PROJ:
+    if (obj->as.proj) {
+      if (obj->as.proj->fn) retain_object(obj->as.proj->fn);
+      for (size_t i = 0; i < obj->as.proj->argn; i++) {
+        if (obj->as.proj->args && obj->as.proj->args[i])
+          retain_object(obj->as.proj->args[i]);
+      }
+    }
+  break;
   default:
   break;
   }
@@ -197,5 +217,24 @@ KObj *create_verb(UnaryFunc unary, BinaryFunc binary, Token op) {
   obj->as.verb.unary = unary;
   obj->as.verb.binary = binary;
   obj->as.verb.op = op;
+  return obj;
+}
+
+KObj *create_projection(KObj *fn, KObj **args, size_t argn, size_t arity) {
+  KObj *obj = create_object(PROJ);
+  obj->as.proj = (KProj *)arena_alloc(&global_arena, sizeof(KProj));
+  obj->as.proj->fn = fn;
+  obj->as.proj->arity = arity;
+  obj->as.proj->argn = argn;
+  retain_object(fn);
+  if (argn > 0) {
+    obj->as.proj->args = (KObj **)malloc(sizeof(KObj *) * argn);
+    for (size_t i = 0; i < argn; i++) {
+      obj->as.proj->args[i] = args[i];
+      retain_object(args[i]);
+    }
+  } else {
+    obj->as.proj->args = NULL;
+  }
   return obj;
 }

@@ -6,8 +6,8 @@
 
 KObj *evaluate(ASTNode *node);
 void env_dump();
-KObj* call_unary(KObj* fn, KObj* arg);
-KObj* call_binary(KObj* fn, KObj* left, KObj* right);
-KObj* call_n(KObj* fn, KObj** args, size_t argn);
+KObj *call_unary(KObj *fn, KObj *arg);
+KObj *call_binary(KObj *fn, KObj *left, KObj *right);
+KObj *call_n(KObj *fn, KObj **args, size_t argn);
 
 #endif

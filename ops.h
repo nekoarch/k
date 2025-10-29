@@ -9,11 +9,7 @@ typedef struct {
   BinaryFunc binary;
 } OpDesc;
 
-typedef enum {
-  ASSOC_LEFT,
-  ASSOC_RIGHT,
-  ASSOC_NONE
-} Assoc;
+typedef enum { ASSOC_LEFT, ASSOC_RIGHT, ASSOC_NONE } Assoc;
 
 typedef struct {
   TokenType type;

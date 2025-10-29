@@ -1,20 +1,21 @@
 #include "eval.h"
-#include "def.h"
-#include "builtins.h"
-#include <stdio.h>
-#include <stdbool.h>
-#include <string.h>
-#include <stdlib.h>
 #include "arena.h"
 #include "ast.h"
+#include "builtins.h"
+#include "def.h"
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 static int scan_node(ASTNode *n);
-#include "repl.h"
 #include "ops.h"
+#include "repl.h"
 
 static char *k_strdup_local(const char *s) {
   size_t len = strlen(s);
   char *res = (char *)arena_alloc(&global_arena, len + 1);
-  if (!res) return NULL;
+  if (!res)
+    return NULL;
   memcpy(res, s, len + 1);
   return res;
 }
@@ -32,7 +33,10 @@ typedef struct {
 static EnvFrame env_stack[256];
 static size_t env_top = 0;
 
-static void env_push() { env_top++; env_stack[env_top].count = 0; }
+static void env_push() {
+  env_top++;
+  env_stack[env_top].count = 0;
+}
 
 static void env_pop() {
   EnvFrame *frame = &env_stack[env_top];
@@ -83,7 +87,8 @@ void env_dump() {
 }
 
 static KObj *eval_literal(KObj *obj) {
-  if (!obj) return create_nil();
+  if (!obj)
+    return create_nil();
   switch (obj->type) {
   case VECTOR: {
     KObj *res = create_vec(obj->as.vector->length);
@@ -105,7 +110,7 @@ static KObj *eval_literal(KObj *obj) {
   }
 }
 
-KObj* evaluate(ASTNode *node) {
+KObj *evaluate(ASTNode *node) {
   if (node == NULL) {
     return create_nil();
   }
@@ -152,7 +157,8 @@ KObj* evaluate(ASTNode *node) {
           const char *name = call->as.call.callee->as.var.name;
           KObj *vec = env_get(name);
           if (vec->type != VECTOR) {
-            if (vec->type != NIL) printf("^type\n");
+            if (vec->type != NIL)
+              printf("^type\n");
             release_object(vec);
             return create_nil();
           }
@@ -219,7 +225,8 @@ KObj* evaluate(ASTNode *node) {
             }
             for (size_t i = 0; i < idx_count; i++) {
               size_t pos = (size_t)idxs[i];
-              KObj *new_val = val_is_vec ? &right_val->as.vector->items[i] : right_val;
+              KObj *new_val =
+                  val_is_vec ? &right_val->as.vector->items[i] : right_val;
               vector_set(vec, pos, new_val);
             }
             free(idxs);
@@ -239,23 +246,26 @@ KObj* evaluate(ASTNode *node) {
           const char *name = call->as.call.callee->as.var.name;
           KObj *vec = env_get(name);
           if (vec->type != VECTOR) {
-            if (vec->type != NIL) printf("^type\n");
+            if (vec->type != NIL)
+              printf("^type\n");
             release_object(vec);
             return create_nil();
           }
           size_t argc = call->as.call.arg_count;
-          KObj **idxobjs = (KObj **)malloc(sizeof(KObj*) * argc);
+          KObj **idxobjs = (KObj **)malloc(sizeof(KObj *) * argc);
           for (size_t i = 0; i < argc; i++) {
             idxobjs[i] = evaluate(call->as.call.args[i]);
             if (idxobjs[i]->type == NIL) {
-              for (size_t j = 0; j <= i; j++) release_object(idxobjs[j]);
+              for (size_t j = 0; j <= i; j++)
+                release_object(idxobjs[j]);
               free(idxobjs);
               release_object(vec);
               return create_nil();
             }
             if (idxobjs[i]->type != INT) {
               printf("^type\n");
-              for (size_t j = 0; j <= i; j++) release_object(idxobjs[j]);
+              for (size_t j = 0; j <= i; j++)
+                release_object(idxobjs[j]);
               free(idxobjs);
               release_object(vec);
               return create_nil();
@@ -265,7 +275,8 @@ KObj* evaluate(ASTNode *node) {
           for (size_t i = 0; i + 1 < argc; i++) {
             if (container->type != VECTOR) {
               printf("^type\n");
-              for (size_t j = 0; j < argc; j++) release_object(idxobjs[j]);
+              for (size_t j = 0; j < argc; j++)
+                release_object(idxobjs[j]);
               free(idxobjs);
               release_object(vec);
               return create_nil();
@@ -274,7 +285,8 @@ KObj* evaluate(ASTNode *node) {
             size_t len = container->as.vector->length;
             if (id < 0 || (size_t)id >= len) {
               printf("^length\n");
-              for (size_t j = 0; j < argc; j++) release_object(idxobjs[j]);
+              for (size_t j = 0; j < argc; j++)
+                release_object(idxobjs[j]);
               free(idxobjs);
               release_object(vec);
               return create_nil();
@@ -284,7 +296,8 @@ KObj* evaluate(ASTNode *node) {
           }
           if (container->type != VECTOR) {
             printf("^type\n");
-            for (size_t j = 0; j < argc; j++) release_object(idxobjs[j]);
+            for (size_t j = 0; j < argc; j++)
+              release_object(idxobjs[j]);
             free(idxobjs);
             release_object(vec);
             return create_nil();
@@ -293,20 +306,23 @@ KObj* evaluate(ASTNode *node) {
           size_t clen = container->as.vector->length;
           if (last < 0 || (size_t)last >= clen) {
             printf("^length\n");
-            for (size_t j = 0; j < argc; j++) release_object(idxobjs[j]);
+            for (size_t j = 0; j < argc; j++)
+              release_object(idxobjs[j]);
             free(idxobjs);
             release_object(vec);
             return create_nil();
           }
           KObj *right_val = evaluate(node->as.binary.right);
           if (right_val->type == NIL) {
-            for (size_t j = 0; j < argc; j++) release_object(idxobjs[j]);
+            for (size_t j = 0; j < argc; j++)
+              release_object(idxobjs[j]);
             free(idxobjs);
             release_object(vec);
             return right_val;
           }
           vector_set(container, (size_t)last, right_val);
-          for (size_t j = 0; j < argc; j++) release_object(idxobjs[j]);
+          for (size_t j = 0; j < argc; j++)
+            release_object(idxobjs[j]);
           free(idxobjs);
           release_object(vec);
           return right_val;
@@ -357,12 +373,12 @@ KObj* evaluate(ASTNode *node) {
     }
   }
   case AST_ADVERB: {
-    KObj* child_obj = evaluate(node->as.adverb.child);
+    KObj *child_obj = evaluate(node->as.adverb.child);
     if (child_obj->type == NIL) {
       return child_obj;
     }
-    KObj* adv = create_object(ADVERB);
-    adv->as.adverb = (KAdverb*)arena_alloc(&global_arena, sizeof(KAdverb));
+    KObj *adv = create_object(ADVERB);
+    adv->as.adverb = (KAdverb *)arena_alloc(&global_arena, sizeof(KAdverb));
     adv->as.adverb->op = node->as.adverb.op;
     adv->as.adverb->child = child_obj;
     return adv;
@@ -393,12 +409,15 @@ KObj* evaluate(ASTNode *node) {
         return create_nil();
       }
       for (size_t i = 0; i < argn; i++) {
-        if (i == assign_idx) continue;
+        if (i == assign_idx)
+          continue;
         args[i] = evaluate(node->as.call.args[i]);
         if (args[i]->type == NIL) {
           for (size_t j = 0; j < argn; j++) {
-            if (j == i) break;
-            if (j == assign_idx) continue;
+            if (j == i)
+              break;
+            if (j == assign_idx)
+              continue;
             release_object(args[j]);
           }
           release_object(args[assign_idx]);
@@ -411,7 +430,8 @@ KObj* evaluate(ASTNode *node) {
       for (size_t i = 0; i < argn; i++) {
         args[i] = evaluate(node->as.call.args[i]);
         if (args[i]->type == NIL) {
-          for (size_t j = 0; j <= i; j++) release_object(args[j]);
+          for (size_t j = 0; j <= i; j++)
+            release_object(args[j]);
           release_object(fn);
           free(args);
           return create_nil();
@@ -419,10 +439,11 @@ KObj* evaluate(ASTNode *node) {
       }
     }
     if (fn->type == ADVERB) {
-      KObj* child = fn->as.adverb->child;
-      KObj* result = NULL;
+      KObj *child = fn->as.adverb->child;
+      KObj *result = NULL;
       if (fn->as.adverb->op.type == SLASH) {
-        if (child->type == VERB || child->type == LAMBDA || child->type == PROJ) {
+        if (child->type == VERB || child->type == LAMBDA ||
+            child->type == PROJ) {
           if (argn == 1) {
             result = k_over(child, args[0], NULL);
           } else if (argn == 2) {
@@ -447,7 +468,8 @@ KObj* evaluate(ASTNode *node) {
           }
         }
       } else if (fn->as.adverb->op.type == BACKSLASH) {
-        if (child->type == VERB || child->type == LAMBDA || child->type == PROJ) {
+        if (child->type == VERB || child->type == LAMBDA ||
+            child->type == PROJ) {
           if (argn == 1) {
             result = k_scan(child, args[0], NULL);
           } else if (argn == 2) {
@@ -472,14 +494,16 @@ KObj* evaluate(ASTNode *node) {
           }
         }
       } else if (fn->as.adverb->op.type == TICK) {
-        if (child->type == VERB || child->type == LAMBDA || child->type == PROJ) {
+        if (child->type == VERB || child->type == LAMBDA ||
+            child->type == PROJ) {
           result = k_each_n(child, args, argn);
         } else {
           printf("^type (each)\n");
           result = create_nil();
         }
       } else if (fn->as.adverb->op.type == SLASH_COLON) {
-        if (!(child->type == VERB || child->type == LAMBDA || child->type == PROJ)) {
+        if (!(child->type == VERB || child->type == LAMBDA ||
+              child->type == PROJ)) {
           printf("^type (eachright)\n");
           result = create_nil();
         } else if (argn != 2) {
@@ -494,13 +518,17 @@ KObj* evaluate(ASTNode *node) {
             for (size_t i = 0; i < len; i++) {
               KObj *elem = &right->as.vector->items[i];
               KObj *val = NULL;
-            if (child->type == VERB && child->as.verb.binary) {
-              val = child->as.verb.binary(left, elem);
-            } else {
-              KObj *call_args[2] = { left, elem };
-              val = call_n(child, call_args, 2);
-            }
-              if (val->type == NIL) { release_object(res); result = val; goto adv_done; }
+              if (child->type == VERB && child->as.verb.binary) {
+                val = child->as.verb.binary(left, elem);
+              } else {
+                KObj *call_args[2] = {left, elem};
+                val = call_n(child, call_args, 2);
+              }
+              if (val->type == NIL) {
+                release_object(res);
+                result = val;
+                goto adv_done;
+              }
               vector_append(res, val);
               release_object(val);
             }
@@ -509,13 +537,14 @@ KObj* evaluate(ASTNode *node) {
             if (child->type == VERB && child->as.verb.binary) {
               result = child->as.verb.binary(left, right);
             } else {
-              KObj *call_args[2] = { left, right };
+              KObj *call_args[2] = {left, right};
               result = call_n(child, call_args, 2);
             }
           }
         }
       } else if (fn->as.adverb->op.type == BACKSLASH_COLON) {
-        if (!(child->type == VERB || child->type == LAMBDA || child->type == PROJ)) {
+        if (!(child->type == VERB || child->type == LAMBDA ||
+              child->type == PROJ)) {
           printf("^type (eachleft)\n");
           result = create_nil();
         } else if (argn != 2) {
@@ -530,13 +559,17 @@ KObj* evaluate(ASTNode *node) {
             for (size_t i = 0; i < len; i++) {
               KObj *elem = &left->as.vector->items[i];
               KObj *val = NULL;
-            if (child->type == VERB && child->as.verb.binary) {
-              val = child->as.verb.binary(elem, right);
-            } else {
-              KObj *call_args[2] = { elem, right };
-              val = call_n(child, call_args, 2);
-            }
-              if (val->type == NIL) { release_object(res); result = val; goto adv_done; }
+              if (child->type == VERB && child->as.verb.binary) {
+                val = child->as.verb.binary(elem, right);
+              } else {
+                KObj *call_args[2] = {elem, right};
+                val = call_n(child, call_args, 2);
+              }
+              if (val->type == NIL) {
+                release_object(res);
+                result = val;
+                goto adv_done;
+              }
               vector_append(res, val);
               release_object(val);
             }
@@ -545,7 +578,7 @@ KObj* evaluate(ASTNode *node) {
             if (child->type == VERB && child->as.verb.binary) {
               result = child->as.verb.binary(left, right);
             } else {
-              KObj *call_args[2] = { left, right };
+              KObj *call_args[2] = {left, right};
               result = call_n(child, call_args, 2);
             }
           }
@@ -554,15 +587,17 @@ KObj* evaluate(ASTNode *node) {
         printf("^nyi\n");
         result = create_nil();
       }
-adv_done:
-      for (size_t i = 0; i < argn; i++) release_object(args[i]);
+    adv_done:
+      for (size_t i = 0; i < argn; i++)
+        release_object(args[i]);
       free(args);
       release_object(fn);
       return result;
     }
     if (fn->type == LAMBDA || fn->type == VERB || fn->type == PROJ) {
       KObj *result_obj = call_n(fn, args, argn);
-      for (size_t i = 0; i < argn; i++) release_object(args[i]);
+      for (size_t i = 0; i < argn; i++)
+        release_object(args[i]);
       free(args);
       release_object(fn);
       return result_obj;
@@ -631,7 +666,8 @@ adv_done:
       release_object(current);
       current = next;
       if (current->type == NIL) {
-        for (size_t j = ai + 1; j < argn; j++) release_object(args[j]);
+        for (size_t j = ai + 1; j < argn; j++)
+          release_object(args[j]);
         free(args);
         return current;
       }
@@ -643,7 +679,8 @@ adv_done:
     KObj *result = create_nil();
     for (size_t i = 0; i < node->as.seq.count; i++) {
       KObj *val = evaluate(node->as.seq.items[i]);
-      if (i > 0) release_object(result);
+      if (i > 0)
+        release_object(result);
       result = val;
     }
     return result;
@@ -661,20 +698,20 @@ adv_done:
   return create_nil();
 }
 
-KObj* call_unary(KObj* fn, KObj* arg) {
+KObj *call_unary(KObj *fn, KObj *arg) {
   if (fn->type == PROJ) {
-    KObj *args[1] = { arg };
+    KObj *args[1] = {arg};
     return call_n(fn, args, 1);
   }
   if (fn->type == LAMBDA) {
     env_push();
-    KLambda* lam = fn->as.lambda;
+    KLambda *lam = fn->as.lambda;
     if (lam->param_count > 0) {
       env_set(lam->params[0], arg);
     } else {
       env_set("x", arg);
     }
-    KObj* result = create_nil();
+    KObj *result = create_nil();
     for (size_t i = 0; i < lam->body_count; i++) {
       release_object(result);
       result = evaluate(lam->body[i]);
@@ -697,14 +734,14 @@ KObj* call_unary(KObj* fn, KObj* arg) {
   return create_nil();
 }
 
-KObj* call_binary(KObj* fn, KObj* left, KObj* right) {
+KObj *call_binary(KObj *fn, KObj *left, KObj *right) {
   if (fn->type == PROJ) {
-    KObj *args[2] = { left, right };
+    KObj *args[2] = {left, right};
     return call_n(fn, args, 2);
   }
   if (fn->type == LAMBDA) {
     env_push();
-    KLambda* lam = fn->as.lambda;
+    KLambda *lam = fn->as.lambda;
     if (lam->param_count > 0) {
       env_set(lam->params[0], left);
       if (lam->param_count > 1) {
@@ -716,7 +753,7 @@ KObj* call_binary(KObj* fn, KObj* left, KObj* right) {
       env_set("x", left);
       env_set("y", right);
     }
-    KObj* result = create_nil();
+    KObj *result = create_nil();
     for (size_t i = 0; i < lam->body_count; i++) {
       release_object(result);
       result = evaluate(lam->body[i]);
@@ -735,7 +772,7 @@ KObj* call_binary(KObj* fn, KObj* left, KObj* right) {
   return create_nil();
 }
 
-KObj* call_n(KObj* fn, KObj** args, size_t argn) {
+KObj *call_n(KObj *fn, KObj **args, size_t argn) {
   if (fn->type == PROJ) {
     KProj *p = fn->as.proj;
     size_t total = p->argn + argn;
@@ -743,17 +780,22 @@ KObj* call_n(KObj* fn, KObj** args, size_t argn) {
       KObj **combined = NULL;
       if (total > 0) {
         combined = (KObj **)malloc(sizeof(KObj *) * total);
-        for (size_t i = 0; i < p->argn; i++) combined[i] = p->args[i];
-        for (size_t i = 0; i < argn; i++) combined[p->argn + i] = args[i];
+        for (size_t i = 0; i < p->argn; i++)
+          combined[i] = p->args[i];
+        for (size_t i = 0; i < argn; i++)
+          combined[p->argn + i] = args[i];
       }
       KObj *np = create_projection(p->fn, combined, total, p->arity);
-      if (combined) free(combined);
+      if (combined)
+        free(combined);
       return np;
     }
     size_t n = total;
     KObj **combined = (KObj **)malloc(sizeof(KObj *) * n);
-    for (size_t i = 0; i < p->argn; i++) combined[i] = p->args[i];
-    for (size_t i = 0; i < argn; i++) combined[p->argn + i] = args[i];
+    for (size_t i = 0; i < p->argn; i++)
+      combined[i] = p->args[i];
+    for (size_t i = 0; i < argn; i++)
+      combined[p->argn + i] = args[i];
     KObj *res = call_n(p->fn, combined, n);
     free(combined);
     return res;
@@ -765,16 +807,18 @@ KObj* call_n(KObj* fn, KObj** args, size_t argn) {
       int max_idx = 0; // - x/y/z
       for (size_t i = 0; i < lam_scan->body_count; i++) {
         int t = scan_node(lam_scan->body[i]);
-        if (t > max_idx) max_idx = t;
+        if (t > max_idx)
+          max_idx = t;
       }
       arity = max_idx; // 0..3
-      if (arity == 0) arity = 0;
+      if (arity == 0)
+        arity = 0;
     }
     if ((int)argn < arity) {
       return create_projection(fn, args, argn, (size_t)arity);
     }
     env_push();
-    KLambda* lam = fn->as.lambda;
+    KLambda *lam = fn->as.lambda;
     if (lam->param_count > 0) {
       size_t n = lam->param_count < (int)argn ? (size_t)lam->param_count : argn;
       for (size_t i = 0; i < n; i++) {
@@ -787,7 +831,7 @@ KObj* call_n(KObj* fn, KObj** args, size_t argn) {
         env_set(defaults[i], args[i]);
       }
     }
-    KObj* result = create_nil();
+    KObj *result = create_nil();
     for (size_t i = 0; i < lam->body_count; i++) {
       release_object(result);
       result = evaluate(lam->body[i]);
@@ -800,8 +844,10 @@ KObj* call_n(KObj* fn, KObj** args, size_t argn) {
     return result;
   }
   if (fn->type == VERB) {
-    if (argn == 1 && fn->as.verb.unary) return fn->as.verb.unary(args[0]);
-    if (argn == 2 && fn->as.verb.binary) return fn->as.verb.binary(args[0], args[1]);
+    if (argn == 1 && fn->as.verb.unary)
+      return fn->as.verb.unary(args[0]);
+    if (argn == 2 && fn->as.verb.binary)
+      return fn->as.verb.binary(args[0], args[1]);
     printf("^rank\n");
     return create_nil();
   }
@@ -810,50 +856,60 @@ KObj* call_n(KObj* fn, KObj** args, size_t argn) {
 }
 
 static int scan_node(ASTNode *n) {
-  if (!n) return 0;
+  if (!n)
+    return 0;
   switch (n->type) {
-    case AST_VAR: {
-      const char *nm = n->as.var.name;
-      if (!nm) return 0;
-      if (strcmp(nm, "x") == 0) return 1;
-      if (strcmp(nm, "y") == 0) return 2;
-      if (strcmp(nm, "z") == 0) return 3;
+  case AST_VAR: {
+    const char *nm = n->as.var.name;
+    if (!nm)
       return 0;
+    if (strcmp(nm, "x") == 0)
+      return 1;
+    if (strcmp(nm, "y") == 0)
+      return 2;
+    if (strcmp(nm, "z") == 0)
+      return 3;
+    return 0;
+  }
+  case AST_LITERAL:
+    return 0;
+  case AST_UNARY:
+    return scan_node(n->as.unary.child);
+  case AST_BINARY: {
+    int a = scan_node(n->as.binary.left);
+    int b = scan_node(n->as.binary.right);
+    return a > b ? a : b;
+  }
+  case AST_CALL: {
+    int m = scan_node(n->as.call.callee);
+    for (size_t i = 0; i < n->as.call.arg_count; i++) {
+      int t = scan_node(n->as.call.args[i]);
+      if (t > m)
+        m = t;
     }
-    case AST_LITERAL:
-      return 0;
-    case AST_UNARY:
-      return scan_node(n->as.unary.child);
-    case AST_BINARY: {
-      int a = scan_node(n->as.binary.left);
-      int b = scan_node(n->as.binary.right);
-      return a > b ? a : b;
+    return m;
+  }
+  case AST_SEQ:
+  case AST_LIST: {
+    int m = 0;
+    for (size_t i = 0; i < n->as.seq.count; i++) {
+      int t = scan_node(n->as.seq.items[i]);
+      if (t > m)
+        m = t;
     }
-    case AST_CALL: {
-      int m = scan_node(n->as.call.callee);
-      for (size_t i = 0; i < n->as.call.arg_count; i++) {
-        int t = scan_node(n->as.call.args[i]);
-        if (t > m) m = t;
-      }
-      return m;
-    }
-    case AST_SEQ:
-    case AST_LIST: {
-      int m = 0;
-      for (size_t i = 0; i < n->as.seq.count; i++) {
-        int t = scan_node(n->as.seq.items[i]);
-        if (t > m) m = t;
-      }
-      return m;
-    }
-    case AST_CONDITIONAL: {
-      int a = scan_node(n->as.conditional.condition);
-      int b = scan_node(n->as.conditional.then_branch);
-      int c = scan_node(n->as.conditional.else_branch);
-      int m = a > b ? a : b; if (c > m) m = c; return m;
-    }
-    case AST_ADVERB:
-      return scan_node(n->as.adverb.child);
+    return m;
+  }
+  case AST_CONDITIONAL: {
+    int a = scan_node(n->as.conditional.condition);
+    int b = scan_node(n->as.conditional.then_branch);
+    int c = scan_node(n->as.conditional.else_branch);
+    int m = a > b ? a : b;
+    if (c > m)
+      m = c;
+    return m;
+  }
+  case AST_ADVERB:
+    return scan_node(n->as.adverb.child);
   }
   return 0;
 }

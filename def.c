@@ -1,14 +1,15 @@
 #include "def.h"
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include "ast.h"
 #include "arena.h"
+#include "ast.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 static char *k_strdup_local(const char *s) {
   size_t len = strlen(s);
   char *res = (char *)arena_alloc(&global_arena, len + 1);
-  if (!res) return NULL;
+  if (!res)
+    return NULL;
   memcpy(res, s, len + 1);
   return res;
 }
@@ -41,29 +42,31 @@ void release_object(KObj *obj) {
       for (size_t i = 0; i < obj->as.vector->length; i++) {
         release_object(&obj->as.vector->items[i]);
       }
-    break;
+      break;
     case DICT:
       release_object(obj->as.dict->keys);
       release_object(obj->as.dict->values);
-    break;
+      break;
     case LAMBDA:
-    break;
+      break;
     case ADVERB:
       release_object(obj->as.adverb->child);
-    break;
+      break;
     case PROJ:
       if (obj->as.proj) {
-        if (obj->as.proj->fn) release_object(obj->as.proj->fn);
+        if (obj->as.proj->fn)
+          release_object(obj->as.proj->fn);
         if (obj->as.proj->args) {
           for (size_t i = 0; i < obj->as.proj->argn; i++) {
-            if (obj->as.proj->args[i]) release_object(obj->as.proj->args[i]);
+            if (obj->as.proj->args[i])
+              release_object(obj->as.proj->args[i]);
           }
           free(obj->as.proj->args);
         }
       }
-    break;
+      break;
     default:
-    break;
+      break;
     }
   }
 }
@@ -91,13 +94,9 @@ KObj *create_float(double value) {
   return obj;
 }
 
-KObj *create_pinf() {
-  return create_object(PINF);
-}
+KObj *create_pinf() { return create_object(PINF); }
 
-KObj *create_ninf() {
-  return create_object(NINF);
-}
+KObj *create_ninf() { return create_object(NINF); }
 
 KObj *create_vec(size_t capacity) {
   KObj *obj = create_object(VECTOR);
@@ -108,9 +107,10 @@ KObj *create_vec(size_t capacity) {
   }
   obj->as.vector->length = 0;
   obj->as.vector->capacity = capacity;
-  obj->as.vector->items = (capacity > 0)
-                              ? (KObj *)arena_alloc(&global_arena, capacity * sizeof(KObj))
-                              : NULL;
+  obj->as.vector->items =
+      (capacity > 0)
+          ? (KObj *)arena_alloc(&global_arena, capacity * sizeof(KObj))
+          : NULL;
   if (!obj->as.vector->items && capacity > 0) {
     fprintf(stderr, "^oom\n");
     return NULL;
@@ -140,7 +140,8 @@ KObj *create_dict(KObj *keys, KObj *values) {
 
 // Retain subobjects for a copied KObj placed inline in a vector.
 static void retain_subobjects(KObj *obj) {
-  if (!obj) return;
+  if (!obj)
+    return;
   switch (obj->type) {
   case VECTOR: {
     KVec *v = obj->as.vector;
@@ -151,21 +152,22 @@ static void retain_subobjects(KObj *obj) {
   case DICT:
     retain_object(obj->as.dict->keys);
     retain_object(obj->as.dict->values);
-  break;
+    break;
   case ADVERB:
     retain_object(obj->as.adverb->child);
-  break;
+    break;
   case PROJ:
     if (obj->as.proj) {
-      if (obj->as.proj->fn) retain_object(obj->as.proj->fn);
+      if (obj->as.proj->fn)
+        retain_object(obj->as.proj->fn);
       for (size_t i = 0; i < obj->as.proj->argn; i++) {
         if (obj->as.proj->args && obj->as.proj->args[i])
           retain_object(obj->as.proj->args[i]);
       }
     }
-  break;
+    break;
   default:
-  break;
+    break;
   }
 }
 
@@ -176,8 +178,10 @@ void vector_append(KObj *vec_obj, KObj *item) {
   KVec *vec = vec_obj->as.vector;
   if (vec->length >= vec->capacity) {
     size_t new_capacity = vec->capacity * 2;
-    if (new_capacity == 0) new_capacity = 8;
-    KObj *new_items = (KObj *)arena_alloc(&global_arena, new_capacity * sizeof(KObj));
+    if (new_capacity == 0)
+      new_capacity = 8;
+    KObj *new_items =
+        (KObj *)arena_alloc(&global_arena, new_capacity * sizeof(KObj));
     if (vec->items && vec->length > 0) {
       memcpy(new_items, vec->items, vec->length * sizeof(KObj));
     }
@@ -191,9 +195,11 @@ void vector_append(KObj *vec_obj, KObj *item) {
 }
 
 void vector_set(KObj *vec_obj, size_t index, KObj *src) {
-  if (!vec_obj || vec_obj->type != VECTOR) return;
+  if (!vec_obj || vec_obj->type != VECTOR)
+    return;
   KVec *vec = vec_obj->as.vector;
-  if (index >= vec->length) return;
+  if (index >= vec->length)
+    return;
   release_object(&vec->items[index]);
   vec->items[index] = *src;
   vec->items[index].ref_count = 1;

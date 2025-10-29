@@ -1,14 +1,14 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include "parser.h"
+#include "arena.h"
+#include "def.h"
+#include "eval.h"
+#include "ops.h"
 #include <ctype.h>
 #include <limits.h>
 #include <stdbool.h>
-#include "parser.h"
-#include "def.h"
-#include "eval.h"
-#include "arena.h"
-#include "ops.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 static ASTNode *parse_expression(Parser *parser);
 static ASTNode *parse_unary(Parser *parser);
@@ -22,19 +22,22 @@ static bool parse_args_until(Parser *parser, TokenType closing,
   ASTNode **args = NULL;
   size_t arg_capacity = 4;
   size_t arg_count = 0;
-  args = (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *) * arg_capacity);
+  args =
+      (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *) * arg_capacity);
   if (parser->current.type != closing) {
     while (true) {
       ASTNode *arg = parse_expression(parser);
       if (!arg) {
         if (args) {
-          for (size_t i = 0; i < arg_count; i++) free_ast(args[i]);
+          for (size_t i = 0; i < arg_count; i++)
+            free_ast(args[i]);
         }
         return false;
       }
       if (arg_count >= arg_capacity) {
         arg_capacity *= 2;
-        ASTNode **new_args = (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *) * arg_capacity);
+        ASTNode **new_args = (ASTNode **)arena_alloc(
+            &global_arena, sizeof(ASTNode *) * arg_capacity);
         memcpy(new_args, args, arg_count * sizeof(ASTNode *));
         args = new_args;
       }
@@ -57,15 +60,16 @@ static bool is_unary_op(TokenType type) {
 }
 
 static bool unary_op_allowed(Parser *parser) {
-  if (!is_unary_op(parser->current.type)) return false;
+  if (!is_unary_op(parser->current.type))
+    return false;
   Lexer backup_lexer = *parser->lexer;
   Token backup_current = parser->current;
   Token backup_previous = parser->previous;
   advance(parser);
-  bool allowed = !((parser->current.type == SLASH ||
-                    parser->current.type == BACKSLASH ||
-                    parser->current.type == TICK) &&
-                   !parser->current.ws_before);
+  bool allowed =
+      !((parser->current.type == SLASH || parser->current.type == BACKSLASH ||
+         parser->current.type == TICK) &&
+        !parser->current.ws_before);
   *parser->lexer = backup_lexer;
   parser->current = backup_current;
   parser->previous = backup_previous;
@@ -73,9 +77,10 @@ static bool unary_op_allowed(Parser *parser) {
 }
 
 static KObj *token_to_number(Token token) {
-  if (token.length >= 2 &&
-      (token.start[token.length - 1] == 'w' || token.start[token.length - 1] == 'W')) {
-    if (token.start[0] == '-') return create_ninf();
+  if (token.length >= 2 && (token.start[token.length - 1] == 'w' ||
+                            token.start[token.length - 1] == 'W')) {
+    if (token.start[0] == '-')
+      return create_ninf();
     return create_pinf();
   }
 
@@ -84,7 +89,11 @@ static KObj *token_to_number(Token token) {
 
   int i = 0;
   int sign = 1;
-  if (i < len && (s[i] == '+' || s[i] == '-')) { if (s[i] == '-') sign = -1; i++; }
+  if (i < len && (s[i] == '+' || s[i] == '-')) {
+    if (s[i] == '-')
+      sign = -1;
+    i++;
+  }
 
   int64_t mant = 0;
   bool mant_overflow = false;
@@ -93,9 +102,16 @@ static KObj *token_to_number(Token token) {
   int frac_digits = 0;
   for (; i < len; i++) {
     char ch = s[i];
-    if (ch == '.') { if (saw_dot) break; saw_dot = true; continue; }
-    if (ch == 'e' || ch == 'E' || ch == 'w' || ch == 'W') break;
-    if (!isdigit((unsigned char)ch)) break;
+    if (ch == '.') {
+      if (saw_dot)
+        break;
+      saw_dot = true;
+      continue;
+    }
+    if (ch == 'e' || ch == 'E' || ch == 'w' || ch == 'W')
+      break;
+    if (!isdigit((unsigned char)ch))
+      break;
     saw_digit = true;
     int d = ch - '0';
     if (!mant_overflow) {
@@ -105,7 +121,8 @@ static KObj *token_to_number(Token token) {
         mant = mant * 10 + d;
       }
     }
-    if (saw_dot) frac_digits++;
+    if (saw_dot)
+      frac_digits++;
   }
 
   long exp_val = 0;
@@ -114,7 +131,11 @@ static KObj *token_to_number(Token token) {
   if (i < len && (s[i] == 'e' || s[i] == 'E')) {
     has_exp = true;
     i++;
-    if (i < len && (s[i] == '+' || s[i] == '-')) { if (s[i] == '-') exp_sign = -1; i++; }
+    if (i < len && (s[i] == '+' || s[i] == '-')) {
+      if (s[i] == '-')
+        exp_sign = -1;
+      i++;
+    }
     bool exp_digits = false;
     while (i < len && isdigit((unsigned char)s[i])) {
       exp_digits = true;
@@ -133,22 +154,37 @@ static KObj *token_to_number(Token token) {
   long net_exp = (long)exp_sign * exp_val - (long)frac_digits;
 
   if (!saw_dot && !has_exp && saw_digit && !mant_overflow) {
-    if (sign < 0) mant = -mant;
+    if (sign < 0)
+      mant = -mant;
     return create_int(mant);
   }
 
-  static const int64_t pow10[] = {
-    1LL, 10LL, 100LL, 1000LL, 10000LL, 100000LL, 1000000LL, 10000000LL, 100000000LL,
-    1000000000LL, 10000000000LL, 100000000000LL, 1000000000000LL, 10000000000000LL,
-    100000000000000LL, 1000000000000000LL, 10000000000000000LL, 100000000000000000LL,
-    1000000000000000000LL
-  };
+  static const int64_t pow10[] = {1LL,
+                                  10LL,
+                                  100LL,
+                                  1000LL,
+                                  10000LL,
+                                  100000LL,
+                                  1000000LL,
+                                  10000000LL,
+                                  100000000LL,
+                                  1000000000LL,
+                                  10000000000LL,
+                                  100000000000LL,
+                                  1000000000000LL,
+                                  10000000000000LL,
+                                  100000000000000LL,
+                                  1000000000000000LL,
+                                  10000000000000000LL,
+                                  100000000000000000LL,
+                                  1000000000000000000LL};
 
   if (saw_digit && !mant_overflow && net_exp >= 0 && net_exp <= 18) {
     int64_t mul = pow10[net_exp];
     if (mant <= INT64_MAX / mul) {
       int64_t val = mant * mul;
-      if (sign < 0) val = -val;
+      if (sign < 0)
+        val = -val;
       return create_int(val);
     }
   }
@@ -158,7 +194,8 @@ static KObj *token_to_number(Token token) {
       int64_t div = pow10[k];
       if (mant % div == 0) {
         int64_t val = mant / div;
-        if (sign < 0) val = -val;
+        if (sign < 0)
+          val = -val;
         return create_int(val);
       }
     }
@@ -191,16 +228,21 @@ static KObj *token_to_symbol(Token token) {
 
 static KObj *token_to_atom(Token token) {
   switch (token.type) {
-  case NUMBER: return token_to_number(token);
-  case STRING: return token_to_string(token);
-  case SYMBOL: return token_to_symbol(token);
-  default: return NULL;
+  case NUMBER:
+    return token_to_number(token);
+  case STRING:
+    return token_to_string(token);
+  case SYMBOL:
+    return token_to_symbol(token);
+  default:
+    return NULL;
   }
 }
 
 static KObj *token_to_verb(Token token) {
   const OpDesc *d = get_op_desc(token.type);
-  if (!d || (!d->unary && !d->binary)) return NULL;
+  if (!d || (!d->unary && !d->binary))
+    return NULL;
   return create_verb(d->unary, d->binary, token);
 }
 
@@ -211,24 +253,42 @@ static void advance(Parser *parser) {
 
 static bool is_value_token(TokenType type) {
   return type == NUMBER || type == IDENT || type == STRING || type == SYMBOL ||
-         type == RPAREN || type == RBRACKET || type == RBRACE ||
-         type == SIN || type == COS || type == ABS || type == EXP || type == LOG || type == RAND;
+         type == RPAREN || type == RBRACKET || type == RBRACE || type == SIN ||
+         type == COS || type == ABS || type == EXP || type == LOG ||
+         type == RAND;
 }
 
 static bool is_expr_start(TokenType type) {
-  return type == NUMBER || type == IDENT || type == STRING || type == SYMBOL || type == SIN ||
-         type == COS || type == ABS || type == DOLLAR || type == LPAREN ||
-         type == LBRACKET || type == LBRACE;
+  return type == NUMBER || type == IDENT || type == STRING || type == SYMBOL ||
+         type == SIN || type == COS || type == ABS || type == DOLLAR ||
+         type == LPAREN || type == LBRACKET || type == LBRACE;
 }
 
 static bool is_prefix_context(Parser *parser) {
   TokenType prev = parser->previous.type;
-  if (prev == KEOF) return true;
+  if (prev == KEOF)
+    return true;
   switch (prev) {
-  case PLUS: case MINUS: case STAR: case PERCENT: case AMP:
-  case BAR: case TILDE: case CARET: case BANG: case HASH: case UNDERSCORE: case EQUAL: case LESS: case MORE: case COMMA: case LPAREN: case LBRACKET:
+  case PLUS:
+  case MINUS:
+  case STAR:
+  case PERCENT:
+  case AMP:
+  case BAR:
+  case TILDE:
+  case CARET:
+  case BANG:
+  case HASH:
+  case UNDERSCORE:
+  case EQUAL:
+  case LESS:
+  case MORE:
+  case COMMA:
+  case LPAREN:
+  case LBRACKET:
   case LBRACE:
-  case COLON: case SEMICOLON:
+  case COLON:
+  case SEMICOLON:
   case SIN:
   case EXP:
   case COS:
@@ -251,8 +311,10 @@ static bool is_prefix_context(Parser *parser) {
 }
 
 static bool consume_negative(Parser *parser, Token *out) {
-  if (parser->current.type != MINUS) return false;
-  if (!is_prefix_context(parser)) return false;
+  if (parser->current.type != MINUS)
+    return false;
+  if (!is_prefix_context(parser))
+    return false;
 
   Lexer backup_lexer = *parser->lexer;
   Token backup_current = parser->current;
@@ -264,7 +326,8 @@ static bool consume_negative(Parser *parser, Token *out) {
     Token combined;
     combined.type = NUMBER;
     combined.start = backup_current.start;
-    combined.length = (int)(number.start + number.length - backup_current.start);
+    combined.length =
+        (int)(number.start + number.length - backup_current.start);
     advance(parser); // consume number
     *out = combined;
     return true;
@@ -287,8 +350,10 @@ static bool read_atom(Parser *parser, Token *out) {
 }
 
 static bool peek_negative(Parser *parser) {
-  if (parser->current.type != MINUS) return false;
-  if (!is_prefix_context(parser)) return false;
+  if (parser->current.type != MINUS)
+    return false;
+  if (!is_prefix_context(parser))
+    return false;
   Lexer backup_lexer = *parser->lexer;
   Token backup_current = parser->current;
   Token backup_previous = parser->previous;
@@ -301,8 +366,10 @@ static bool peek_negative(Parser *parser) {
 }
 
 static bool peek_enumerate(Parser *parser) {
-  if (parser->current.type != BANG) return false;
-  if (!is_prefix_context(parser)) return false;
+  if (parser->current.type != BANG)
+    return false;
+  if (!is_prefix_context(parser))
+    return false;
   Lexer backup_lexer = *parser->lexer;
   Token backup_current = parser->current;
   Token backup_previous = parser->previous;
@@ -323,13 +390,15 @@ static ASTNode *parse_list(Parser *parser) {
     ASTNode *elem = parse_expression(parser);
     if (!elem) {
       if (items) {
-        for (size_t i = 0; i < count; i++) free_ast(items[i]);
+        for (size_t i = 0; i < count; i++)
+          free_ast(items[i]);
       }
       return NULL;
     }
     if (count >= capacity) {
       capacity *= 2;
-      ASTNode **new_items = (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *) * capacity);
+      ASTNode **new_items =
+          (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *) * capacity);
       memcpy(new_items, items, count * sizeof(ASTNode *));
       items = new_items;
     }
@@ -341,7 +410,8 @@ static ASTNode *parse_list(Parser *parser) {
   if (parser->current.type != RPAREN) {
     printf("^error: ) \n");
     if (items) {
-      for (size_t i = 0; i < count; i++) free_ast(items[i]);
+      for (size_t i = 0; i < count; i++)
+        free_ast(items[i]);
     }
     return NULL;
   }
@@ -360,7 +430,8 @@ static ASTNode *parse_lambda(Parser *parser) {
   bool last_semicolon = false;
   if (parser->current.type == LBRACKET) {
     advance(parser); // [
-    params = (char **)arena_alloc(&global_arena, sizeof(char *) * param_capacity);
+    params =
+        (char **)arena_alloc(&global_arena, sizeof(char *) * param_capacity);
     while (parser->current.type != RBRACKET && parser->current.type != KEOF) {
       if (parser->current.type != IDENT) {
         printf("^param\n");
@@ -372,7 +443,8 @@ static ASTNode *parse_lambda(Parser *parser) {
       name[t.length] = '\0';
       if (param_count >= param_capacity) {
         param_capacity *= 2;
-        char **new_params = (char **)arena_alloc(&global_arena, sizeof(char *) * param_capacity);
+        char **new_params = (char **)arena_alloc(
+            &global_arena, sizeof(char *) * param_capacity);
         memcpy(new_params, params, param_count * sizeof(char *));
         params = new_params;
       }
@@ -393,13 +465,16 @@ static ASTNode *parse_lambda(Parser *parser) {
     parser->previous.type = LBRACE;
   }
 
-  body = (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *) * body_capacity);
+  body =
+      (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *) * body_capacity);
   while (parser->current.type != RBRACE && parser->current.type != KEOF) {
     ASTNode *expr = parse_expression(parser);
-    if (!expr) goto error;
+    if (!expr)
+      goto error;
     if (body_count >= body_capacity) {
       body_capacity *= 2;
-      ASTNode **new_body = (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *) * body_capacity);
+      ASTNode **new_body = (ASTNode **)arena_alloc(
+          &global_arena, sizeof(ASTNode *) * body_capacity);
       memcpy(new_body, body, body_count * sizeof(ASTNode *));
       body = new_body;
     }
@@ -415,12 +490,14 @@ static ASTNode *parse_lambda(Parser *parser) {
     goto error;
   }
   advance(parser); // }
-  KObj *lambda_obj = create_lambda(param_count, params, body, body_count, !last_semicolon);
+  KObj *lambda_obj =
+      create_lambda(param_count, params, body, body_count, !last_semicolon);
   return create_literal_node(lambda_obj);
 
 error:
   if (body) {
-    for (size_t i = 0; i < body_count; i++) free_ast(body[i]);
+    for (size_t i = 0; i < body_count; i++)
+      free_ast(body[i]);
   }
   return NULL;
 }
@@ -441,7 +518,8 @@ static ASTNode *parse_primary(Parser *parser) {
         KObj *vec = create_vec(8);
         vector_append(vec, first_val);
         release_object(first_val);
-        while (parser->current.type == NUMBER || parser->current.type == STRING ||
+        while (parser->current.type == NUMBER ||
+               parser->current.type == STRING ||
                parser->current.type == SYMBOL || peek_negative(parser)) {
           Token next_tok;
           (void)read_atom(parser, &next_tok);
@@ -457,7 +535,9 @@ static ASTNode *parse_primary(Parser *parser) {
     }
     return create_literal_node(first_val);
   }
-  if (parser->current.type == SIN || parser->current.type == COS || parser->current.type == ABS || parser->current.type == EXP || parser->current.type == LOG || parser->current.type == RAND) {
+  if (parser->current.type == SIN || parser->current.type == COS ||
+      parser->current.type == ABS || parser->current.type == EXP ||
+      parser->current.type == LOG || parser->current.type == RAND) {
     Token tok = parser->current;
     advance(parser);
     KObj *verb = token_to_verb(tok);
@@ -489,7 +569,8 @@ static ASTNode *parse_primary(Parser *parser) {
     parser->previous = backup_previous;
 
     ASTNode *list = parse_list(parser);
-    if (!list) return NULL;
+    if (!list)
+      return NULL;
     return list;
   }
   if (parser->current.type == LBRACE) {
@@ -504,10 +585,10 @@ static ASTNode *parse_postfix(Parser *parser) {
     Lexer backup_lexer = *parser->lexer;
     Token backup_current = parser->current;
     advance(parser);
-    bool adverb_follow = ((parser->current.type == SLASH ||
-                           parser->current.type == BACKSLASH ||
-                           parser->current.type == TICK) &&
-                          !parser->current.ws_before);
+    bool adverb_follow =
+        ((parser->current.type == SLASH || parser->current.type == BACKSLASH ||
+          parser->current.type == TICK) &&
+         !parser->current.ws_before);
     *parser->lexer = backup_lexer;
     parser->current = backup_current;
     if (adverb_follow) {
@@ -520,7 +601,8 @@ static ASTNode *parse_postfix(Parser *parser) {
   }
   if (!node) {
     node = parse_primary(parser);
-    if (!node) return NULL;
+    if (!node)
+      return NULL;
   }
   while (true) {
     if ((parser->current.type == SLASH || parser->current.type == BACKSLASH ||
@@ -530,19 +612,24 @@ static ASTNode *parse_postfix(Parser *parser) {
       advance(parser);
       if ((op.type == SLASH || op.type == BACKSLASH) &&
           parser->current.type == COLON && !parser->current.ws_before) {
-        if (op.type == SLASH) op.type = SLASH_COLON; else op.type = BACKSLASH_COLON;
+        if (op.type == SLASH)
+          op.type = SLASH_COLON;
+        else
+          op.type = BACKSLASH_COLON;
         advance(parser);
       }
       node = create_adverb_node(op, node);
       continue;
     }
-    if (node->type == AST_UNARY && node->as.unary.op.type == DOLLAR && parser->current.type == LBRACKET) {
+    if (node->type == AST_UNARY && node->as.unary.op.type == DOLLAR &&
+        parser->current.type == LBRACKET) {
       advance(parser); // consume '['
 
       ASTNode *condition = parse_expression(parser);
       if (!condition || parser->current.type != SEMICOLON) {
         printf("^error: $[b;x;y] condition error\n");
-        if (condition) free_ast(condition);
+        if (condition)
+          free_ast(condition);
         free_ast(node);
         return NULL;
       }
@@ -551,7 +638,8 @@ static ASTNode *parse_postfix(Parser *parser) {
       ASTNode *then_branch = parse_expression(parser);
       if (!then_branch || parser->current.type != SEMICOLON) {
         printf("^error: $[b;x;y] then branch error\n");
-        if (then_branch) free_ast(then_branch);
+        if (then_branch)
+          free_ast(then_branch);
         free_ast(condition);
         free_ast(node);
         return NULL;
@@ -561,7 +649,8 @@ static ASTNode *parse_postfix(Parser *parser) {
       ASTNode *else_branch = parse_expression(parser);
       if (!else_branch || parser->current.type != RBRACKET) {
         printf("^error: $[b;x;y] else branch error\n");
-        if (else_branch) free_ast(else_branch);
+        if (else_branch)
+          free_ast(else_branch);
         free_ast(then_branch);
         free_ast(condition);
         free_ast(node);
@@ -594,7 +683,8 @@ static ASTNode *parse_postfix(Parser *parser) {
       if (!paren_call) {
         while (parser->current.type == LBRACKET) {
           advance(parser); // [
-          ASTNode **more = NULL; size_t more_n = 0;
+          ASTNode **more = NULL;
+          size_t more_n = 0;
           if (!parse_args_until(parser, RBRACKET, &more, &more_n)) {
             free_ast(node);
             goto arg_error;
@@ -607,8 +697,10 @@ static ASTNode *parse_postfix(Parser *parser) {
           advance(parser); // ]
           if (more_n > 0) {
             size_t new_n = arg_count + more_n;
-            ASTNode **combined = (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *) * new_n);
-            if (arg_count > 0 && args) memcpy(combined, args, arg_count * sizeof(ASTNode *));
+            ASTNode **combined = (ASTNode **)arena_alloc(
+                &global_arena, sizeof(ASTNode *) * new_n);
+            if (arg_count > 0 && args)
+              memcpy(combined, args, arg_count * sizeof(ASTNode *));
             memcpy(combined + arg_count, more, more_n * sizeof(ASTNode *));
             args = combined;
             arg_count = new_n;
@@ -625,16 +717,18 @@ static ASTNode *parse_postfix(Parser *parser) {
         }
         ASTNode *lit = create_literal_node(vec);
         release_object(vec);
-        ASTNode **new_args = (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *));
+        ASTNode **new_args =
+            (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *));
         new_args[0] = lit;
         node = create_call_node(node, new_args, 1);
       } else {
         node = create_call_node(node, args, arg_count);
       }
       continue;
-arg_error:
+    arg_error:
       if (args) {
-        for (size_t i = 0; i < arg_count; i++) free_ast(args[i]);
+        for (size_t i = 0; i < arg_count; i++)
+          free_ast(args[i]);
       }
       return NULL;
     }
@@ -646,7 +740,8 @@ arg_error:
         free_ast(node);
         return NULL;
       }
-      ASTNode **args = (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *));
+      ASTNode **args =
+          (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *));
       args[0] = arg;
       node = create_call_node(node, args, 1);
       continue;
@@ -654,8 +749,7 @@ arg_error:
     if (parser->current.ws_before &&
         (is_expr_start(parser->current.type) || peek_negative(parser) ||
          peek_enumerate(parser) ||
-         (node->type == AST_LITERAL &&
-          node->as.literal.value->type == VERB &&
+         (node->type == AST_LITERAL && node->as.literal.value->type == VERB &&
           is_unary_op(parser->current.type)))) {
       ASTNode *arg = parse_unary(parser);
       if (!arg) {
@@ -664,18 +758,21 @@ arg_error:
       }
       // A g/\ B
       if (arg->type == AST_CALL && arg->as.call.callee &&
-          arg->as.call.callee->type == AST_ADVERB && arg->as.call.arg_count == 1 &&
+          arg->as.call.callee->type == AST_ADVERB &&
+          arg->as.call.arg_count == 1 &&
           (arg->as.call.callee->as.adverb.op.type == SLASH ||
            arg->as.call.callee->as.adverb.op.type == BACKSLASH)) {
         ASTNode *adverb = arg->as.call.callee;
         ASTNode *right = arg->as.call.args[0];
-        ASTNode **call_args = (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *) * 2);
+        ASTNode **call_args =
+            (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *) * 2);
         call_args[0] = node;
         call_args[1] = right;
         node = create_call_node(adverb, call_args, 2);
         continue;
       }
-      ASTNode **args = (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *));
+      ASTNode **args =
+          (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *));
       args[0] = arg;
       node = create_call_node(node, args, 1);
       continue;
@@ -701,7 +798,8 @@ static ASTNode *parse_unary(Parser *parser) {
       if (parser->current.type != RBRACKET) {
         printf("^error: ] \n");
         if (args) {
-          for (size_t i = 0; i < arg_count; i++) free_ast(args[i]);
+          for (size_t i = 0; i < arg_count; i++)
+            free_ast(args[i]);
         }
         return NULL;
       }
@@ -725,7 +823,7 @@ static ASTNode *parse_unary(Parser *parser) {
     Token *ops = (Token *)malloc(sizeof(Token) * capacity);
     while (unary_op_allowed(parser) &&
            (parser->current.type != MINUS ||
-           (is_prefix_context(parser) && !peek_negative(parser)))) {
+            (is_prefix_context(parser) && !peek_negative(parser)))) {
       if (count >= capacity) {
         capacity *= 2;
         ops = (Token *)realloc(ops, sizeof(Token) * capacity);
@@ -755,7 +853,7 @@ static ASTNode *parse_unary(Parser *parser) {
   Token *ops = (Token *)malloc(sizeof(Token) * capacity);
   while (unary_op_allowed(parser) &&
          (parser->current.type != MINUS ||
-         (is_prefix_context(parser) && !peek_negative(parser)))) {
+          (is_prefix_context(parser) && !peek_negative(parser)))) {
     if (count >= capacity) {
       capacity *= 2;
       ops = (Token *)realloc(ops, sizeof(Token) * capacity);
@@ -776,7 +874,8 @@ static ASTNode *parse_unary(Parser *parser) {
     if (parser->current.type != RBRACKET) {
       printf("^error: ] \n");
       if (args) {
-        for (size_t i = 0; i < arg_count; i++) free_ast(args[i]);
+        for (size_t i = 0; i < arg_count; i++)
+          free_ast(args[i]);
       }
       free(ops);
       return NULL;
@@ -793,7 +892,8 @@ static ASTNode *parse_unary(Parser *parser) {
     return child;
   }
   if (count > 0) {
-    bool follows_expr = is_expr_start(parser->current.type) || peek_negative(parser) || peek_enumerate(parser);
+    bool follows_expr = is_expr_start(parser->current.type) ||
+                        peek_negative(parser) || peek_enumerate(parser);
     if (!follows_expr && parser->current.type != LBRACKET) {
       ASTNode *node = NULL;
       if (count == 1) {
@@ -809,7 +909,8 @@ static ASTNode *parse_unary(Parser *parser) {
       for (int i = count - 1; i >= 0; i--) {
         body = create_unary_node(ops[i], body);
       }
-      ASTNode **body_arr = (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *));
+      ASTNode **body_arr =
+          (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *));
       body_arr[0] = body;
       KObj *lam = create_lambda(0, NULL, body_arr, 1, true);
       ASTNode *lam_node = create_literal_node(lam);
@@ -832,8 +933,8 @@ static ASTNode *parse_unary(Parser *parser) {
   return parse_postfix(parser);
 }
 
-static ASTNode* parse_expression(Parser* parser) {
-  ASTNode* left_node = parse_unary(parser);
+static ASTNode *parse_expression(Parser *parser) {
+  ASTNode *left_node = parse_unary(parser);
   if (!left_node)
     return NULL;
   // todo: split this
@@ -843,8 +944,9 @@ static ASTNode* parse_expression(Parser* parser) {
       parser->current.type == COLON || parser->current.type == BAR ||
       parser->current.type == TILDE || parser->current.type == CARET ||
       parser->current.type == EQUAL || parser->current.type == BANG ||
-      parser->current.type == EXP || parser->current.type == LOG || parser->current.type == RAND ||
-      parser->current.type == HASH || parser->current.type == UNDERSCORE || parser->current.type == LESS ||
+      parser->current.type == EXP || parser->current.type == LOG ||
+      parser->current.type == RAND || parser->current.type == HASH ||
+      parser->current.type == UNDERSCORE || parser->current.type == LESS ||
       parser->current.type == MORE || parser->current.type == COMMA) {
     Token op = parser->current;
     advance(parser);
@@ -855,22 +957,28 @@ static ASTNode* parse_expression(Parser* parser) {
       advance(parser);
       if ((adv.type == SLASH || adv.type == BACKSLASH) &&
           parser->current.type == COLON && !parser->current.ws_before) {
-        if (adv.type == SLASH) adv.type = SLASH_COLON; else adv.type = BACKSLASH_COLON;
+        if (adv.type == SLASH)
+          adv.type = SLASH_COLON;
+        else
+          adv.type = BACKSLASH_COLON;
         advance(parser);
       }
-      ASTNode* right_node = parse_expression(parser);
-      if (!right_node) return NULL;
+      ASTNode *right_node = parse_expression(parser);
+      if (!right_node)
+        return NULL;
       KObj *verb = token_to_verb(op);
       ASTNode *verb_node = create_literal_node(verb);
       release_object(verb);
       ASTNode *adverb = create_adverb_node(adv, verb_node);
-      ASTNode **args = (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *) * 2);
+      ASTNode **args =
+          (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *) * 2);
       args[0] = left_node;
       args[1] = right_node;
       return create_call_node(adverb, args, 2);
     }
-    ASTNode* right_node = parse_expression(parser);
-    if (!right_node) return NULL;
+    ASTNode *right_node = parse_expression(parser);
+    if (!right_node)
+      return NULL;
     return create_binary_node(op, left_node, right_node);
   }
   return left_node;
@@ -883,7 +991,7 @@ void init_parser(Parser *parser, Lexer *lexer) {
   advance(parser);
 }
 
-ASTNode* parse(Parser *parser) {
+ASTNode *parse(Parser *parser) {
   if (parser->current.type == KEOF) {
     return create_literal_node(create_nil());
   }
@@ -894,28 +1002,33 @@ ASTNode* parse(Parser *parser) {
     ASTNode *expr = parse_expression(parser);
     if (!expr) {
       if (items) {
-        for (size_t i = 0; i < count; i++) free_ast(items[i]);
+        for (size_t i = 0; i < count; i++)
+          free_ast(items[i]);
       }
       return NULL;
     }
     if (count >= cap) {
       cap *= 2;
-      ASTNode **new_items = (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *) * cap);
+      ASTNode **new_items =
+          (ASTNode **)arena_alloc(&global_arena, sizeof(ASTNode *) * cap);
       memcpy(new_items, items, count * sizeof(ASTNode *));
       items = new_items;
     }
     items[count++] = expr;
     if (parser->current.type == SEMICOLON) {
       advance(parser);
-      if (parser->current.type == KEOF) break;
+      if (parser->current.type == KEOF)
+        break;
       continue;
     }
     break;
   }
   if (parser->current.type != KEOF) {
-    for (size_t i = 0; i < count; i++) free_ast(items[i]);
+    for (size_t i = 0; i < count; i++)
+      free_ast(items[i]);
     return NULL;
   }
-  if (count == 1) return items[0];
+  if (count == 1)
+    return items[0];
   return create_seq_node(items, count);
 }

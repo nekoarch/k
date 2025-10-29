@@ -60,7 +60,8 @@ ASTNode *create_binary_node(Token op, ASTNode *left, ASTNode *right);
 ASTNode *create_call_node(ASTNode *callee, ASTNode **args, size_t arg_count);
 ASTNode *create_seq_node(ASTNode **items, size_t count);
 ASTNode *create_list_node(ASTNode **items, size_t count);
-ASTNode *create_conditional_node(ASTNode *condition, ASTNode *then_branch, ASTNode *else_branch);
+ASTNode *create_conditional_node(ASTNode *condition, ASTNode *then_branch,
+                                 ASTNode *else_branch);
 ASTNode *create_adverb_node(Token op, ASTNode *child);
 ASTNode *create_var_node(const char *name);
 void free_ast(ASTNode *node);

@@ -1,9 +1,9 @@
 #ifndef DEF_H_
 #define DEF_H_
-#include <stdint.h>
-#include <stddef.h>
-#include <stdbool.h>
 #include "token.h"
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 typedef enum {
   NIL,
   CHAR,   // i8
@@ -35,8 +35,8 @@ struct KProj {
   KObj **args;
 };
 
-typedef struct KObj* (*UnaryFunc)(struct KObj*);
-typedef struct KObj* (*BinaryFunc)(struct KObj*, struct KObj*);
+typedef struct KObj *(*UnaryFunc)(struct KObj *);
+typedef struct KObj *(*BinaryFunc)(struct KObj *, struct KObj *);
 
 struct KVerb {
   UnaryFunc unary;
@@ -52,7 +52,7 @@ struct KAdverb {
 struct KVec {
   size_t length;
   size_t capacity;
-  KObj* items;
+  KObj *items;
 };
 
 struct KDict {

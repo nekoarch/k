@@ -1,7 +1,7 @@
 #ifndef PARSER_H_
 #define PARSER_H_
-#include "lex.h"
 #include "ast.h"
+#include "lex.h"
 
 typedef struct {
   Lexer *lexer;

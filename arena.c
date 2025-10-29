@@ -3,13 +3,12 @@
 
 Arena global_arena;
 
-void arena_init(Arena *arena) {
-  arena->head = NULL;
-}
+void arena_init(Arena *arena) { arena->head = NULL; }
 
 void *arena_alloc(Arena *arena, size_t size) {
   ArenaBlock *block = (ArenaBlock *)malloc(sizeof(ArenaBlock) + size);
-  if (!block) return NULL;
+  if (!block)
+    return NULL;
   block->next = arena->head;
   block->size = size;
   arena->head = block;
